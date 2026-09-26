@@ -1,0 +1,13 @@
+# tests/integration/
+#
+# Responsibility:
+#   Cross-cutting integration and end-to-end tests that exercise multiple
+#   services together (backend + database + redis + frontend).
+#
+#   These tests require a running Docker Compose stack and verify that
+#   the full request flow works correctly from API call to database
+#   persistence and back.
+#
+# Run:
+#   docker compose up -d
+#   cd tests/integration && pytest

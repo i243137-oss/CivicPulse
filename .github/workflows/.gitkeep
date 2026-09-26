@@ -1,0 +1,9 @@
+# .github/workflows/
+#
+# Responsibility:
+#   GitHub Actions CI/CD pipeline definitions. This directory will contain:
+#     - ci.yml       – Lint, test, and build on every push / PR
+#     - deploy.yml   – Deploy to staging/production on merge to master
+#     - docker.yml   – Build and push Docker images to registry
+#
+# Triggered by pushes and pull requests to dev and master branches.

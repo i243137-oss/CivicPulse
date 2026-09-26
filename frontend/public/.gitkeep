@@ -1,0 +1,6 @@
+<!-- frontend/public/
+     Responsibility:
+       Static assets that are served as-is without Vite processing.
+       Place favicons, manifest.json, robots.txt, and any other
+       assets that must be available at the web root here.
+-->

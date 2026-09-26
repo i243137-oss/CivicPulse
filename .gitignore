@@ -1,0 +1,68 @@
+# ──────────────────────────────────────────────
+# CivicPulse .gitignore
+# ──────────────────────────────────────────────
+
+# ─── Python / Backend ─────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+*.whl
+.venv/
+venv/
+env/
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# ─── Node / Frontend ─────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+frontend/dist/
+frontend/build/
+.vite/
+
+# ─── Environment ─────────────────────────────
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# ─── IDE / Editor ────────────────────────────
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── Docker ──────────────────────────────────
+docker-compose.override.yml
+
+# ─── Kubernetes ──────────────────────────────
+*.kubeconfig
+kubeconfig
+
+# ─── OS ──────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ─── Misc ────────────────────────────────────
+*.bak
+*.tmp
+*.temp
+.cache/
+
