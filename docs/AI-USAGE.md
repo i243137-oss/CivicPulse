@@ -22,6 +22,13 @@ Each entry follows this template:
 
 ## Log
 
+### 2026-09-27 — Phase 6: Docker Compose, Network Segmentation, and Cloud-Native Stack (Member B)
+
+- **Tool:** Google Antigravity (Gemini)
+- **Prompt summary:** Implement Phase 6 Docker Compose cloud-native stack per assignment specifications. Configure two isolated bridge networks (`edge` and `internal` with `internal: true`). Connect frontend strictly to edge and backend to edge + internal. Configure PostgreSQL and Redis on internal without exposing ports in production. Use service names for container-to-container communication. Configure named volumes (`pgdata`, `redisdata`, `ollama_models`) and Redis AOF persistence (`--appendonly yes --appendfsync everysec`). Implement healthchecks and `depends_on: service_healthy` startup orchestration. Build production Nginx reverse proxy for `/api/` and `/health`. Keep development bind mounts only in development Compose configuration. Validate stack convergence, network isolation, and end-to-end complaint intake/triage/stats flow.
+- **Output used:** `compose.yaml`, `compose.prod.yaml`, `docker-compose.yml`, `docker-compose.prod.yml`, `.env.example`, `backend/requirements.txt` (added `httpx`), `docs/ENGINEERING-NOTES.md`, and `docs/AI-USAGE.md`.
+- **Human review:** Verified all 4 containers healthy (`docker compose ps`), confirmed frontend cannot resolve or reach postgres/redis (`nc: bad address`), verified backend connects to postgres and redis, verified Redis AOF enabled (`aof_enabled:1`), verified `/health`, `/api/stats` cache hit/miss, and verified POST `/api/complaints` auto-triage and status transition PATCH.
+
 ### 2026-09-27 — PR #12 Review Fixes: Elimination of Duplicated FSM, ErrorBoundary Mount, Reverse Proxy, Intake Form Cleanup, and Resilient API Client
 
 - **Tool:** Google Antigravity (Gemini)
@@ -35,7 +42,6 @@ Each entry follows this template:
 - **Prompt summary:** Implement Phase 5 React TypeScript frontend according to the assignment rubric and master AI specification. Create typed API models matching backend schemas, implement central API client with relative `/api` paths, develop views (SubmitPage with honest loading state, DashboardPage with X-Cache badge and provider observability, ComplaintsPage with filters and pagination, ComplaintDetailPage with status transitions), implement ErrorBoundary, configure Vitest suite with >= 5 meaningful component tests, and document ADR-0003 for frontend runtime configuration.
 - **Output used:** React views, components, CSS styles, Vitest component test suites (14 tests across 5 test suites), ADR-0003, and engineering notes.
 - **Human review:** Verified TypeScript compilation (`npx tsc --noEmit`), linting (`npm run lint`), production build (`npm run build`), all 14 Vitest component tests (`npm test`), and documented findings.
-
 
 - **Tool:** Claude (Anthropic) via Cline VS Code extension
 - **Prompt summary:** Create a production-oriented folder structure for a full-stack civic issue reporting platform using React TypeScript frontend, FastAPI backend, PostgreSQL, Redis, Docker Compose, Kubernetes, and GitHub Actions.

@@ -1,77 +1,149 @@
 # ═══════════════════════════════════════════════════════════════════════
-#  CivicPulse — Production Compose Stack
+#  CivicPulse — Production Compose Stack (Phase 6 / Phase 14)
 # ═══════════════════════════════════════════════════════════════════════
 #  Usage:
-#    docker compose -f docker-compose.prod.yml up -d --build
+#    docker compose -f docker-compose.prod.yml up -d
 #
-#  Differences from development:
-#    • No volume mounts (baked images)
-#    • Restart policies enforced
-#    • No debug ports exposed beyond what's necessary
+#  Key properties:
+#    • Image-only deployment (no build: directives anywhere)
+#    • Pinned tags via ${IMAGE_TAG}
+#    • Two isolated networks: edge and internal (internal: true)
+#    • Database and cache not exposed to host or edge network
+#    • Named volumes with Redis AOF persistence
+#    • Resource limits and restart policies enforced
 # ═══════════════════════════════════════════════════════════════════════
 
 services:
+  # ── React Frontend ────────────────────────────────────────────────
+  frontend:
+    image: ${IMAGE_PREFIX:-}civicpulse-frontend:${IMAGE_TAG:-latest}
+    container_name: civicpulse-frontend
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    networks:
+      - edge
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:80/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+        reservations:
+          cpus: "0.10"
+          memory: 64M
+    restart: always
+
   # ── FastAPI Backend ───────────────────────────────────────────────
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: ${IMAGE_PREFIX:-}civicpulse-backend:${IMAGE_TAG:-latest}
     container_name: civicpulse-backend
+    command: sh -c "alembic upgrade head && python scripts/seed.py && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     env_file:
       - .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-civicpulse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-civicpulse_secret_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-civicpulse}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      TRIAGE_PROVIDER: ${TRIAGE_PROVIDER:-rules}
+    networks:
+      - edge
+      - internal
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
     restart: always
 
-  # ── React Frontend ────────────────────────────────────────────────
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: civicpulse-frontend
-    ports:
-      - "80:80"
-    depends_on:
-      - backend
-    restart: always
-
-  # ── PostgreSQL ────────────────────────────────────────────────────
+  # ── PostgreSQL Database ───────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
     container_name: civicpulse-postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:-civicpulse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-civicpulse_secret_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-civicpulse}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - internal
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-civicpulse} -d ${POSTGRES_DB:-civicpulse}"]
+      interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 512M
+        reservations:
+          cpus: "0.20"
+          memory: 128M
     restart: always
 
-  # ── Redis ─────────────────────────────────────────────────────────
+  # ── Redis Cache & Rate Limiting ───────────────────────────────────
   redis:
     image: redis:7-alpine
     container_name: civicpulse-redis
     command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
     volumes:
-      - redis_data:/data
+      - redisdata:/data
+    networks:
+      - internal
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+        reservations:
+          cpus: "0.10"
+          memory: 64M
     restart: always
 
-volumes:
-  postgres_data:
-  redis_data:
+networks:
+  edge:
+    driver: bridge
+  internal:
+    driver: bridge
+    internal: true
 
+volumes:
+  pgdata:
+  redisdata:
+  ollama_models:

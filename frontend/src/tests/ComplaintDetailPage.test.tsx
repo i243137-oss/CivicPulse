@@ -34,8 +34,12 @@ describe("ComplaintDetailPage", () => {
 
     await waitFor(() => {
       expect(screen.getByText(/Issue #f83a00-1122/i)).toBeInTheDocument();
-      expect(screen.getByText(/Broken water main leaking/i)).toBeInTheDocument();
-      expect(screen.getByText(/Major clean water distribution leak/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Broken water main leaking/i),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(/Major clean water distribution leak/i),
+      ).toBeInTheDocument();
       expect(screen.getByText(/llm:gemini-2.5-flash/i)).toBeInTheDocument();
       expect(screen.getByText(/1100 ms/i)).toBeInTheDocument();
       expect(screen.getByText(/0300-1234567/i)).toBeInTheDocument();
@@ -45,23 +49,31 @@ describe("ComplaintDetailPage", () => {
   it("advances workflow status and shows success banner", async () => {
     const user = userEvent.setup({ delay: null });
     vi.spyOn(apiClient, "getComplaint").mockResolvedValue(mockComplaint);
-    const updateSpy = vi.spyOn(apiClient, "updateComplaintStatus").mockResolvedValue({
-      ...mockComplaint,
-      status: Status.RESOLVED,
-      allowed_transitions: [],
-    });
+    const updateSpy = vi
+      .spyOn(apiClient, "updateComplaintStatus")
+      .mockResolvedValue({
+        ...mockComplaint,
+        status: Status.RESOLVED,
+        allowed_transitions: [],
+      });
 
     render(<ComplaintDetailPage complaintId="f83a00-1122" onBack={vi.fn()} />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /mark as resolved/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /mark as resolved/i }),
+      ).toBeInTheDocument();
     });
 
     await user.click(screen.getByRole("button", { name: /mark as resolved/i }));
 
     await waitFor(() => {
-      expect(updateSpy).toHaveBeenCalledWith("f83a00-1122", { status: Status.RESOLVED });
-      expect(screen.getByText(/Status transitioned to Resolved/i)).toBeInTheDocument();
+      expect(updateSpy).toHaveBeenCalledWith("f83a00-1122", {
+        status: Status.RESOLVED,
+      });
+      expect(
+        screen.getByText(/Status transitioned to Resolved/i),
+      ).toBeInTheDocument();
     });
   });
 
@@ -76,7 +88,9 @@ describe("ComplaintDetailPage", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(/Terminal status \(Resolved\)\. No further status changes permitted\./i)
+        screen.getByText(
+          /Terminal status \(Resolved\)\. No further status changes permitted\./i,
+        ),
       ).toBeInTheDocument();
     });
   });

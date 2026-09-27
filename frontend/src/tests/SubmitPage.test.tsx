@@ -14,7 +14,9 @@ describe("SubmitPage", () => {
     const onSubmitted = vi.fn();
     render(<SubmitPage onSubmitted={onSubmitted} />);
 
-    expect(screen.getByRole("heading", { name: /report a civic issue/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /report a civic issue/i }),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText(/description/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/location/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/reporter contact/i)).toBeInTheDocument();
@@ -55,14 +57,19 @@ describe("SubmitPage", () => {
     const locInput = screen.getByLabelText(/location/i);
     const submitBtn = screen.getByRole("button", { name: /submit issue/i });
 
-    await user.type(descInput, "Massive pothole on main avenue disrupting commuter traffic");
+    await user.type(
+      descInput,
+      "Massive pothole on main avenue disrupting commuter traffic",
+    );
     await user.type(locInput, "Sector G-10, Main Double Road");
 
     expect(submitBtn).not.toBeDisabled();
     await user.click(submitBtn);
 
     // Honest loading state during AI triage latency
-    expect(screen.getByRole("button", { name: /submitting & triaging…/i })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /submitting & triaging…/i }),
+    ).toBeDisabled();
 
     // Resolve API promise
     resolvePromise(mockCreated);
@@ -77,17 +84,24 @@ describe("SubmitPage", () => {
     const onSubmitted = vi.fn();
 
     vi.spyOn(apiClient, "createComplaint").mockRejectedValue(
-      new apiClient.ApiError(400, "Bad Request", { detail: "Text failed safety filter" })
+      new apiClient.ApiError(400, "Bad Request", {
+        detail: "Text failed safety filter",
+      }),
     );
 
     render(<SubmitPage onSubmitted={onSubmitted} />);
 
-    await user.type(screen.getByLabelText(/description/i), "Water contamination in sector pipeline");
+    await user.type(
+      screen.getByLabelText(/description/i),
+      "Water contamination in sector pipeline",
+    );
     await user.type(screen.getByLabelText(/location/i), "Street 4, Sector F-6");
     await user.click(screen.getByRole("button", { name: /submit issue/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/"Text failed safety filter"/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/"Text failed safety filter"/i),
+      ).toBeInTheDocument();
     });
     expect(onSubmitted).not.toHaveBeenCalled();
   });
