@@ -9,7 +9,9 @@ import math
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from redis.asyncio import Redis
 
+from app.core.redis import get_redis
 from app.dependencies import get_complaint_service
 from app.models.complaint import CategoryEnum, PriorityEnum, StatusEnum
 from app.schemas.complaint import (
@@ -18,6 +20,7 @@ from app.schemas.complaint import (
     ComplaintResponse,
     ComplaintStatusUpdate,
 )
+from app.services.cache_service import cache_service
 from app.services.complaint_service import (
     ComplaintNotFoundError,
     ComplaintService,
@@ -36,12 +39,15 @@ router = APIRouter(prefix="/api/complaints", tags=["complaints"])
 async def create_complaint(
     payload: ComplaintCreate,
     service: ComplaintService = Depends(get_complaint_service),
+    redis: Redis = Depends(get_redis),
 ) -> ComplaintResponse:
     """
     Submit a citizen complaint.
     Validates input, triggers triage orchestration, and persists the record.
+    Invalidates statistics cache so subsequent stats requests fetch fresh data.
     """
     complaint = await service.create_complaint(payload)
+    await cache_service.invalidate_stats_cache(redis)
     return ComplaintResponse.model_validate(complaint)
 
 
@@ -112,16 +118,19 @@ async def update_complaint_status(
     complaint_id: uuid.UUID,
     payload: ComplaintStatusUpdate,
     service: ComplaintService = Depends(get_complaint_service),
+    redis: Redis = Depends(get_redis),
 ) -> ComplaintResponse:
     """
     Transition a complaint's status according to the finite state machine.
     Rejects invalid state transitions with HTTP 409 Conflict naming the transition.
+    Invalidates statistics cache so subsequent stats requests fetch fresh data.
     """
     try:
         updated = await service.update_status(
             complaint_id=complaint_id,
             target_status=payload.status,
         )
+        await cache_service.invalidate_stats_cache(redis)
         return ComplaintResponse.model_validate(updated)
     except ComplaintNotFoundError as err:
         raise HTTPException(
