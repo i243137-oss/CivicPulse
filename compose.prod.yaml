@@ -1,17 +1,22 @@
 # ═══════════════════════════════════════════════════════════════════════
-#  CivicPulse — Development Compose Stack (Phase 6)
+#  CivicPulse — Production Compose Stack (Phase 6 / Phase 14)
 # ═══════════════════════════════════════════════════════════════════════
 #  Usage:
-#    cp .env.example .env          # ensure configuration is populated
-#    docker compose up --build     # start all services
+#    docker compose -f compose.prod.yaml up -d
+#
+#  Key properties:
+#    • Image-only deployment (no build: directives anywhere)
+#    • Pinned tags via ${IMAGE_TAG}
+#    • Two isolated networks: edge and internal (internal: true)
+#    • Database and cache not exposed to host or edge network
+#    • Named volumes with Redis AOF persistence
+#    • Resource limits and restart policies enforced
 # ═══════════════════════════════════════════════════════════════════════
 
 services:
-  # ── React Frontend (Served by Nginx) ──────────────────────────────
+  # ── React Frontend ────────────────────────────────────────────────
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    image: ${IMAGE_PREFIX:-}civicpulse-frontend:${IMAGE_TAG:-latest}
     container_name: civicpulse-frontend
     ports:
       - "${FRONTEND_PORT:-80}:80"
@@ -26,13 +31,19 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
-    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+        reservations:
+          cpus: "0.10"
+          memory: 64M
+    restart: always
 
   # ── FastAPI Backend ───────────────────────────────────────────────
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: ${IMAGE_PREFIX:-}civicpulse-backend:${IMAGE_TAG:-latest}
     container_name: civicpulse-backend
     command: sh -c "alembic upgrade head && python scripts/seed.py && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     ports:
@@ -48,8 +59,6 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       TRIAGE_PROVIDER: ${TRIAGE_PROVIDER:-rules}
-    volumes:
-      - ./backend:/app
     networks:
       - edge
       - internal
@@ -64,14 +73,20 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
-    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+    restart: always
 
   # ── PostgreSQL Database ───────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
     container_name: civicpulse-postgres
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-civicpulse}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-civicpulse_secret_pass}
@@ -86,15 +101,21 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
-    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 512M
+        reservations:
+          cpus: "0.20"
+          memory: 128M
+    restart: always
 
   # ── Redis Cache & Rate Limiting ───────────────────────────────────
   redis:
     image: redis:7-alpine
     container_name: civicpulse-redis
     command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redisdata:/data
     networks:
@@ -105,7 +126,15 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
-    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+        reservations:
+          cpus: "0.10"
+          memory: 64M
+    restart: always
 
 networks:
   edge:
