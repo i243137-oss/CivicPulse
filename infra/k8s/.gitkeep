@@ -1,0 +1,14 @@
+# infra/k8s/
+#
+# Responsibility:
+#   Kubernetes manifests for deploying CivicPulse to a K8s cluster.
+#   This directory will contain:
+#     - namespace.yaml         – Isolated namespace for the project
+#     - backend-deployment.yaml  – Backend pod spec & replica config
+#     - frontend-deployment.yaml – Frontend pod spec & replica config
+#     - postgres-statefulset.yaml – Persistent database workload
+#     - redis-deployment.yaml    – Cache layer workload
+#     - services.yaml            – ClusterIP / NodePort service definitions
+#     - ingress.yaml             – External traffic routing rules
+#     - configmap.yaml           – Non-secret configuration
+#     - secrets.yaml             – Sensitive values (template only)

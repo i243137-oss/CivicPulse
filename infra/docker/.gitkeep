@@ -1,0 +1,8 @@
+# infra/docker/
+#
+# Responsibility:
+#   Additional Docker configuration files that supplement the root
+#   Dockerfiles. Examples include:
+#     - Custom nginx.conf for the frontend production image
+#     - Multi-stage build helpers
+#     - Docker health check scripts
