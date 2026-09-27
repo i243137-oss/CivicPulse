@@ -1,31 +1,31 @@
-# ═══════════════════════════════════════════════════════════════
-#  CivicPulse Backend — Dockerfile
-# ═══════════════════════════════════════════════════════════════
-#  Build:  docker build -t civicpulse-backend .
-#  Run:    docker run -p 8000:8000 civicpulse-backend
-# ═══════════════════════════════════════════════════════════════
+# syntax=docker/dockerfile:1
 
-FROM python:3.12-slim AS base
+# ---- builder ---------------------------------------------------------------
+FROM python:3.12-slim AS builder
 
-# Prevent Python from writing .pyc files and enable unbuffered logs
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+WORKDIR /build
+
+# Cache-friendly layer order: dependency manifest before source.
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# ---- runtime ----------------------------------------------------------------
+FROM python:3.12-slim AS runtime
+
+# Non-root user (final hardening — read-only fs, dropped capabilities,
+# digest pinning — is completed in Phase 11).
+RUN groupadd --gid 1000 app && useradd --uid 1000 --gid app --shell /bin/false app
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc libpq-dev && \
-    rm -rf /var/lib/apt/lists/*
+COPY --from=builder /install /usr/local
+COPY app ./app
 
-# Install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
-
-# Copy application source
-COPY . .
+USER app
 
 EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')" || exit 1
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
