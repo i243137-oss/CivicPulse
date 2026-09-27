@@ -22,6 +22,13 @@ Each entry follows this template:
 
 ## Log
 
+### 2026-09-27 — PR #12 Review Fixes: Elimination of Duplicated FSM, ErrorBoundary Mount, Reverse Proxy, Intake Form Cleanup, and Resilient API Client
+
+- **Tool:** Google Antigravity (Gemini)
+- **Prompt summary:** Address code review findings for PR #12 (`feature/frontend-ui`). Remove duplicated status state machine from frontend and make allowed transitions backend-owned, mount ErrorBoundary around application tree, fix `/health` client endpoint, implement production Nginx reverse proxy configuration and pin container images (`node:22-alpine`, `nginx:1.27-alpine`), remove category/priority pre-assignment controls from citizen intake form, prevent multiple-read body stream issues in API client, prevent duplicate status submissions and out-of-order response overwrites with AbortController, and fix 409 transition test consistency.
+- **Output used:** Updated `backend/app/schemas/complaint.py` (`allowed_transitions` computed field), `frontend/src/types/complaint.ts`, `frontend/src/api/client.ts`, `frontend/src/pages/ComplaintsPage.tsx`, `frontend/src/pages/ComplaintDetailPage.tsx`, `frontend/src/pages/SubmitPage.tsx`, `frontend/src/App.tsx`, `frontend/Dockerfile`, `frontend/nginx.conf`, `frontend/.dockerignore`, Vitest test suites, ADR-0003, and engineering notes.
+- **Human review:** Verified backend unit/integration tests (`pytest`, 15 passed), frontend component tests (`vitest run`, 14 passed across 5 suites), ESLint (`npm run lint`), TypeScript checking (`tsc --noEmit`), and production build (`npm run build`).
+
 ### 2026-09-27 — Phase 5: Frontend Implementation, Typed Client, and Component Tests
 
 - **Tool:** Claude (Anthropic) via Cline VS Code extension

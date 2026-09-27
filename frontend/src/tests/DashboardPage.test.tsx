@@ -60,7 +60,7 @@ describe("DashboardPage", () => {
     });
 
     // When clicking retry, getStats is re-triggered
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     await user.click(screen.getByRole("button", { name: /retry/i }));
 
     expect(getStatsSpy).toHaveBeenCalledTimes(2);

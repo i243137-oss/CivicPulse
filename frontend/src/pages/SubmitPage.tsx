@@ -1,17 +1,15 @@
 import { useState } from "react";
 import { createComplaint, ApiError } from "../api/client";
-import {
-  Category, Priority, CATEGORY_LABELS, PRIORITY_LABELS, type ComplaintCreate,
-} from "../types/complaint";
+import type { ComplaintCreate } from "../types/complaint";
 
-interface Props { onSubmitted: (id: string) => void; }
+interface Props {
+  onSubmitted: (id: string) => void;
+}
 
 export function SubmitPage({ onSubmitted }: Props) {
   const [text, setText] = useState("");
   const [location, setLocation] = useState("");
   const [reporterContact, setReporterContact] = useState("");
-  const [category, setCategory] = useState<Category | "">("");
-  const [priority, setPriority] = useState<Priority | "">("");
   const [validationError, setValidationError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -41,8 +39,6 @@ export function SubmitPage({ onSubmitted }: Props) {
       text: trimmedText,
       location: trimmedLoc,
       reporter_contact: trimmedContact || undefined,
-      category: category ? (category as Category) : undefined,
-      priority: priority ? (priority as Priority) : undefined,
     };
 
     setSubmitting(true);
@@ -50,7 +46,11 @@ export function SubmitPage({ onSubmitted }: Props) {
       const created = await createComplaint(payload);
       onSubmitted(created.id);
     } catch (err) {
-      setApiError(err instanceof ApiError ? err.message : "Network error: failed to submit complaint.");
+      setApiError(
+        err instanceof ApiError
+          ? err.message
+          : "Network error: failed to submit complaint.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -59,59 +59,80 @@ export function SubmitPage({ onSubmitted }: Props) {
   return (
     <div className="submit-page">
       <h2>📝 Report a Civic Issue</h2>
-      <p className="submit-page__subtitle">Submit municipal concerns. Automated AI triage will prioritize and categorize.</p>
+      <p className="submit-page__subtitle">
+        Submit municipal concerns. Automated AI triage will prioritize and
+        categorize.
+      </p>
       {validationError && (
-        <div className="error-banner"><span>{validationError}</span><button type="button" onClick={() => setValidationError(null)}>×</button></div>
+        <div className="error-banner">
+          <span>{validationError}</span>
+          <button type="button" onClick={() => setValidationError(null)}>
+            ×
+          </button>
+        </div>
       )}
       {apiError && (
-        <div className="error-banner"><span>{apiError}</span><button type="button" onClick={() => setApiError(null)}>×</button></div>
+        <div className="error-banner">
+          <span>{apiError}</span>
+          <button type="button" onClick={() => setApiError(null)}>
+            ×
+          </button>
+        </div>
       )}
       <form className="submit-form" onSubmit={handleSubmit}>
         <div className="form-group">
-          <label htmlFor="issue-text">Description <span className="required">*</span></label>
+          <label htmlFor="issue-text">
+            Description <span className="required">*</span>
+          </label>
           <textarea
-            id="issue-text" rows={5} placeholder="Describe the issue in detail (10-2000 chars)..."
-            value={text} onChange={(e) => setText(e.target.value)} required minLength={10} maxLength={2000}
+            id="issue-text"
+            rows={5}
+            placeholder="Describe the issue in detail (10-2000 chars)..."
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            required
+            minLength={10}
+            maxLength={2000}
           />
           <div className="char-count">{text.trim().length} / 2000 (min 10)</div>
         </div>
         <div className="form-group">
-          <label htmlFor="issue-location">Location <span className="required">*</span></label>
+          <label htmlFor="issue-location">
+            Location <span className="required">*</span>
+          </label>
           <input
-            id="issue-location" type="text" placeholder="e.g. Sector F-7/2, Street 12, Islamabad"
-            value={location} onChange={(e) => setLocation(e.target.value)} required minLength={3} maxLength={200}
+            id="issue-location"
+            type="text"
+            placeholder="e.g. Sector F-7/2, Street 12, Islamabad"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            required
+            minLength={3}
+            maxLength={200}
           />
-          <div className="char-count">{location.trim().length} / 200 (min 3)</div>
+          <div className="char-count">
+            {location.trim().length} / 200 (min 3)
+          </div>
         </div>
         <div className="form-group">
-          <label htmlFor="reporter-contact">Reporter Contact <span className="optional">(optional)</span></label>
+          <label htmlFor="reporter-contact">
+            Reporter Contact <span className="optional">(optional)</span>
+          </label>
           <input
-            id="reporter-contact" type="text" placeholder="Phone number or email"
-            value={reporterContact} onChange={(e) => setReporterContact(e.target.value)} maxLength={255}
+            id="reporter-contact"
+            type="text"
+            placeholder="Phone number or email"
+            value={reporterContact}
+            onChange={(e) => setReporterContact(e.target.value)}
+            maxLength={255}
           />
         </div>
-        <fieldset className="form-fieldset">
-          <legend>Optional Pre-assignments</legend>
-          <div className="form-row">
-            <div className="form-group form-group--half">
-              <label htmlFor="category-select">Category</label>
-              <select id="category-select" value={category} onChange={(e) => setCategory(e.target.value as Category | "")}>
-                <option value="">Auto-detect via AI</option>
-                {Object.values(Category).map((c) => (<option key={c} value={c}>{CATEGORY_LABELS[c]}</option>))}
-              </select>
-            </div>
-            <div className="form-group form-group--half">
-              <label htmlFor="priority-select">Priority</label>
-              <select id="priority-select" value={priority} onChange={(e) => setPriority(e.target.value as Priority | "")}>
-                <option value="">Auto-detect via AI</option>
-                {Object.values(Priority).map((p) => (<option key={p} value={p}>{PRIORITY_LABELS[p]}</option>))}
-              </select>
-            </div>
-          </div>
-        </fieldset>
         <button
-          type="submit" className="btn btn--primary btn--submit"
-          disabled={submitting || text.trim().length < 10 || location.trim().length < 3}
+          type="submit"
+          className="btn btn--primary btn--submit"
+          disabled={
+            submitting || text.trim().length < 10 || location.trim().length < 3
+          }
         >
           {submitting ? "Submitting & Triaging…" : "Submit Issue"}
         </button>

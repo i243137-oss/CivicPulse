@@ -24,7 +24,7 @@ describe("SubmitPage", () => {
   });
 
   it("submits valid complaint and displays honest loading state during triage call", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const onSubmitted = vi.fn();
 
     const mockCreated: Complaint = {
@@ -73,7 +73,7 @@ describe("SubmitPage", () => {
   });
 
   it("surfaces server validation and network errors when submission fails", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const onSubmitted = vi.fn();
 
     vi.spyOn(apiClient, "createComplaint").mockRejectedValue(

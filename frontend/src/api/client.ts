@@ -31,6 +31,8 @@ export class ApiError extends Error {
     const msg =
       typeof body === "object" && body !== null && "detail" in body
         ? JSON.stringify((body as { detail: unknown }).detail)
+        : typeof body === "string" && body.length > 0
+        ? body
         : `${status} ${statusText}`;
     super(msg);
     this.name = "ApiError";
@@ -45,18 +47,24 @@ async function request<T>(
   path: string,
   init?: RequestInit
 ): Promise<{ data: T; headers: Headers }> {
-  const url = `${BASE}${path}`;
+  // Root-relative endpoints like /health or /ready are outside /api
+  const url =
+    path.startsWith("/health") || path.startsWith("/ready")
+      ? path
+      : `${BASE}${path.startsWith("/") ? path : `/${path}`}`;
+
   const res = await fetch(url, {
     headers: { "Content-Type": "application/json", ...init?.headers },
     ...init,
   });
 
   if (!res.ok) {
+    const raw = await res.text();
     let body: unknown;
     try {
-      body = await res.json();
+      body = JSON.parse(raw);
     } catch {
-      body = await res.text();
+      body = raw;
     }
     throw new ApiError(res.status, res.statusText, body);
   }
@@ -83,7 +91,8 @@ export async function getComplaint(id: string): Promise<Complaint> {
 }
 
 export async function listComplaints(
-  filters: ComplaintFilters = {}
+  filters: ComplaintFilters = {},
+  signal?: AbortSignal
 ): Promise<ComplaintListResponse> {
   const params = new URLSearchParams();
   if (filters.category) params.set("category", filters.category);
@@ -94,7 +103,8 @@ export async function listComplaints(
 
   const qs = params.toString();
   const { data } = await request<ComplaintListResponse>(
-    `/complaints${qs ? `?${qs}` : ""}`
+    `/complaints${qs ? `?${qs}` : ""}`,
+    { signal }
   );
   return data;
 }
@@ -135,7 +145,7 @@ export async function getProvidersMeta(): Promise<ProviderInfoResponse> {
 // ─── Health ────────────────────────────────────────────────────
 
 export async function getHealth(): Promise<{ status: string }> {
-  const { data } = await request<{ status: string }>("/health".replace("/api", ""));
-  // Health is at /health not /api/health — use absolute fetch
+  // Liveness is at /health (root level), intentionally outside /api
+  const { data } = await request<{ status: string }>("/health");
   return data;
 }

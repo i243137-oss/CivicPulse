@@ -18,6 +18,7 @@ describe("ComplaintDetailPage", () => {
     category: Category.WATER,
     priority: Priority.HIGH,
     status: Status.IN_PROGRESS,
+    allowed_transitions: [Status.RESOLVED, Status.REJECTED],
     ai_summary: "Major clean water distribution leak",
     triaged_by: "llm:gemini-2.5-flash",
     triage_latency_ms: 1100,
@@ -42,11 +43,12 @@ describe("ComplaintDetailPage", () => {
   });
 
   it("advances workflow status and shows success banner", async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     vi.spyOn(apiClient, "getComplaint").mockResolvedValue(mockComplaint);
     const updateSpy = vi.spyOn(apiClient, "updateComplaintStatus").mockResolvedValue({
       ...mockComplaint,
       status: Status.RESOLVED,
+      allowed_transitions: [],
     });
 
     render(<ComplaintDetailPage complaintId="f83a00-1122" onBack={vi.fn()} />);
@@ -67,6 +69,7 @@ describe("ComplaintDetailPage", () => {
     vi.spyOn(apiClient, "getComplaint").mockResolvedValue({
       ...mockComplaint,
       status: Status.RESOLVED,
+      allowed_transitions: [],
     });
 
     render(<ComplaintDetailPage complaintId="f83a00-1122" onBack={vi.fn()} />);

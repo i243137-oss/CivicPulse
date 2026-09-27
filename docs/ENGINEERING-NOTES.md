@@ -120,10 +120,13 @@ The AI triage system is designed for high reliability, zero-downtime tolerance, 
 ### Stack and Architectural Boundaries
 - **Core Stack**: React 18 + Vite + TypeScript.
 - **Strict Presentation Boundary**: The frontend owns 100% presentation, interaction, validation feedback, and telemetry display. It owns **zero** business rules.
-  - Triage category, priority, and AI summary are determined by backend LLM/rules providers.
-  - Valid status transitions are governed by the backend finite state machine (`VALID_TRANSITIONS` mirrored from the backend transition table).
-  - Terminal statuses (`resolved`, `rejected`) dynamically disable transition actions.
+  - Triage category, priority, and AI summary are determined by backend LLM/rules providers. The citizen intake form collects strictly complaint text, location, and optional contact; manual category/priority pre-assignment controls are completely excluded from intake.
+  - Valid status transitions are decided exclusively by the backend finite state machine and serialized directly on each complaint (`complaint.allowed_transitions`). The frontend maintains **zero** transition tables, eliminating two-sources-of-truth divergence.
+  - Terminal statuses (`resolved`, `rejected`) deliver empty `allowed_transitions: []` from the backend, disabling transition actions and rendering terminal state feedback.
+  - Action buttons dynamically disable during in-flight status PATCH requests, preventing duplicate submissions.
+  - List queries incorporate `AbortController` cancellation to prevent out-of-order response overwrites on rapid filter changes.
   - Any rejected transition surfaces the server's `409 Conflict` message verbatim in the UI rather than a generic error toast.
+  - An `ErrorBoundary` is mounted around the complete application tree in `App.tsx` and at root `main.tsx`.
 
 ### Key Views Implemented
 1. **Intake & Submission (`SubmitPage.tsx`)**:
@@ -138,23 +141,24 @@ The AI triage system is designed for high reliability, zero-downtime tolerance, 
    - **`X-Cache` Telemetry**: Directly inspects the `X-Cache` response header (`HIT` or `MISS`) from Redis and renders a prominent status badge.
 3. **Complaints Listing & Filter Queue (`ComplaintsPage.tsx`)**:
    - Filterable by Category, Priority, and Status with server-side pagination (10 items/page).
-   - Direct status transition actions on list cards for municipal operators.
+   - Direct status transition actions on list cards for municipal operators powered by `complaint.allowed_transitions`.
+   - AbortController request sequencing to eliminate stale query races.
 4. **Issue Detail & State Machine Actions (`ComplaintDetailPage.tsx`)**:
    - Full inspection of complaint text, location, reporter information, and AI triage telemetry.
-   - Finite state machine transition buttons displaying next allowed states according to current status.
-   - Terminal state alert when issue is marked `resolved` or `rejected`.
+   - Finite state machine transition buttons rendered exclusively from server-provided `allowed_transitions`.
+   - In-flight transition disablement and terminal state alert when issue is marked `resolved` or `rejected`.
 
 ### Runtime Configuration & Build-Once-Deploy-Many
 - Build-time baked backend URLs are strictly forbidden.
-- The centralized typed client (`src/api/client.ts`) uses relative `/api` paths.
-- In local development, Vite proxies `/api` to `http://localhost:8000`.
-- In production containers and Kubernetes, Nginx / Ingress reverse proxies `/api` to the backend cluster, guaranteeing that the exact same frontend container image runs in all environments.
+- The centralized typed client (`src/api/client.ts`) uses relative `/api` paths and root-relative `/health`.
+- In local development, Vite proxies `/api` and `/health` to `http://localhost:8000`.
+- In production containers, `frontend/Dockerfile` uses multi-stage build pinned to assignment versions (`node:22-alpine` builder, `nginx:1.27-alpine` runner) and installs `frontend/nginx.conf` reverse proxying `/api/` and `/health` to `http://backend:8000`, guaranteeing that the exact same frontend container image runs in all environments.
 - Architectural decision formally documented in `docs/adr/0003-frontend-runtime-config-and-proxy.md`.
 
 ### Component Testing Suite (Vitest + React Testing Library)
 - ≥ 5 comprehensive component tests passing in CI:
   1. `SubmitPage.test.tsx`: Form validation, honest triage loading state, error display.
-  2. `ComplaintsPage.test.tsx`: Listing rendering, filter updates, verbatim 409 error propagation.
+  2. `ComplaintsPage.test.tsx`: Listing rendering, filter updates, verbatim 409 error propagation with matching transition assertions.
   3. `DashboardPage.test.tsx`: Total counters, `X-Cache` header display, retry on network failure.
   4. `ComplaintDetailPage.test.tsx`: Full issue telemetry, state transition workflow, terminal state.
   5. `ErrorBoundary.test.tsx`: Unhandled render crash capture, fallback UI, recovery on reset.

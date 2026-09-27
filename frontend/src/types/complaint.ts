@@ -29,14 +29,6 @@ export enum Status {
   REJECTED = "rejected",
 }
 
-/** Valid state transitions from the backend state machine. */
-export const VALID_TRANSITIONS: Record<Status, Status[]> = {
-  [Status.OPEN]: [Status.IN_PROGRESS, Status.REJECTED],
-  [Status.IN_PROGRESS]: [Status.RESOLVED, Status.REJECTED],
-  [Status.RESOLVED]: [],
-  [Status.REJECTED]: [],
-};
-
 // ─── Request schemas ───────────────────────────────────────────
 
 export interface ComplaintCreate {
@@ -66,6 +58,8 @@ export interface Complaint {
   triage_latency_ms: number | null;
   created_at: string;
   updated_at: string;
+  /** Allowed transitions decided exclusively by the backend state machine. */
+  allowed_transitions?: Status[];
 }
 
 export interface ComplaintListResponse {
