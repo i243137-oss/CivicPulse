@@ -1,21 +1,20 @@
 """
 CivicPulse backend — application entry point.
 
-Phase 1 scope only:
-  - construct the FastAPI app
-  - wire up CORS from settings
-  - mount the initial liveness health endpoint
-
-Persistence, caching, AI triage, structured logging, request-id propagation
-and graceful shutdown are introduced in later phases and are intentionally
-absent here.
+Follows the four-layer architecture:
+- routes/ -> services/ -> repositories/ / providers/
+No SQL outside repositories, no business rules in routes.
 """
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
+from app.routes.complaints import router as complaints_router
 from app.routes.health import router as health_router
+from app.routes.meta import router as meta_router
+from app.routes.ready import router as ready_router
+from app.routes.stats import router as stats_router
 
 settings = get_settings()
 
@@ -34,7 +33,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount API routers
 app.include_router(health_router)
+app.include_router(ready_router)
+app.include_router(complaints_router)
+app.include_router(stats_router)
+app.include_router(meta_router)
 
 
 @app.get("/", include_in_schema=False)
