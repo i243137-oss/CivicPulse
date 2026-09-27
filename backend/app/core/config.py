@@ -92,6 +92,27 @@ class Settings(BaseSettings):
             f"{self.postgres_host}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         )
 
+    # --- Redis (Cache & Rate Limiting) ---------------------------------------
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+    REDIS_PASSWORD: str | None = None
+    REDIS_DB: int = 0
+    REDIS_URL: str | None = None
+    REDIS_STATS_CACHE_TTL: int = 30  # 30-second TTL as required by specification
+
+    # --- Distributed Rate Limiting -------------------------------------------
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_PER_MINUTE: int = 60
+    RATE_LIMIT_WINDOW_SECONDS: int = 60
+
+    @property
+    def REDIS_CONNECTION_URL(self) -> str:
+        """Construct Redis connection URL."""
+        if self.REDIS_URL:
+            return self.REDIS_URL
+        auth = f":{self.REDIS_PASSWORD}@" if self.REDIS_PASSWORD else ""
+        return f"redis://{auth}{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
+
 
 @lru_cache
 def get_settings() -> Settings:
