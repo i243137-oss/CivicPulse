@@ -65,4 +65,5 @@ Thumbs.db
 *.tmp
 *.temp
 .cache/
-
+*.pdf
+*.docx
