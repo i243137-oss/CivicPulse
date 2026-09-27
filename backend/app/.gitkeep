@@ -1,0 +1,10 @@
+# backend/app/.gitkeep
+#
+# Placeholder — this directory will contain:
+#   main.py        – FastAPI application factory & entry point
+#   api/           – Route handlers organized by domain
+#   models/        – SQLAlchemy ORM models
+#   schemas/       – Pydantic request/response schemas
+#   services/      – Business logic layer
+#   core/          – Settings, security, database connection
+#   utils/         – Shared helpers and utilities
