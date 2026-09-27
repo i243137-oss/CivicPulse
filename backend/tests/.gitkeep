@@ -1,5 +1,0 @@
-# backend/tests/.gitkeep
-#
-# Placeholder — this directory will contain:
-#   conftest.py    – Shared pytest fixtures (test DB, client, etc.)
-#   test_*.py      – Test modules organized by feature domain
