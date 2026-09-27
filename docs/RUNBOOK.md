@@ -69,7 +69,34 @@ docker exec civicpulse-redis redis-cli ping
 | ------------------------------- | ------------------------- | ---------------------------------------- |
 | Backend won't start             | DB not ready              | Check `depends_on` / health checks       |
 | Connection refused on 5432      | PostgreSQL down           | `docker compose restart postgres`        |
-| Frontend shows blank page       | API URL misconfigured     | Check `VITE_API_BASE_URL` in `.env`      |
+| Frontend shows blank page       | API URL misconfigured     | Check `/api` proxy in `vite.config.ts` or Nginx `nginx.conf` |
+
+---
+
+## Frontend Development and Testing Commands
+
+### Development Server
+```bash
+cd frontend
+npm run dev
+# Starts Vite server on http://localhost:5173 with proxying to http://localhost:8000
+```
+
+### Type Checking & Production Build
+```bash
+cd frontend
+npm run lint
+npx tsc --noEmit
+npm run build
+```
+
+### Component Test Suite (Vitest)
+```bash
+cd frontend
+npm test
+# Executes 14 component tests across 5 test suites with jsdom environment
+```
+
 
 ---
 

@@ -5,7 +5,7 @@ Pydantic schemas for Complaint request validation and response serialization.
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from app.models.complaint import CategoryEnum, PriorityEnum, StatusEnum
 
@@ -68,6 +68,14 @@ class ComplaintResponse(BaseModel):
     triage_latency_ms: int | None = None
     created_at: datetime
     updated_at: datetime
+
+    @computed_field
+    @property
+    def allowed_transitions(self) -> list[StatusEnum]:
+        """Allowed transitions determined exclusively by the backend state machine."""
+        from app.services.state_machine import TRANSITION_TABLE
+
+        return sorted(list(TRANSITION_TABLE.get(self.status, set())), key=lambda s: s.value)
 
     model_config = ConfigDict(from_attributes=True)
 
