@@ -48,12 +48,19 @@ class Settings(BaseSettings):
     API_V1_PREFIX: str = "/api"
 
     # --- Database (PostgreSQL / async access) --------------------------------
+    # Supports both POSTGRES_HOST (standard Docker compose/K8s) and POSTGRES_SERVER
+    POSTGRES_HOST: str | None = None
     POSTGRES_SERVER: str = "localhost"
     POSTGRES_PORT: int = 5432
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = "postgres"
     POSTGRES_DB: str = "civicpulse"
     DATABASE_URL: str | None = None
+
+    @property
+    def postgres_host(self) -> str:
+        """Resolved PostgreSQL host address."""
+        return self.POSTGRES_HOST or self.POSTGRES_SERVER
 
     @property
     def ASYNC_DATABASE_URL(self) -> str:
@@ -67,7 +74,7 @@ class Settings(BaseSettings):
             return url
         return (
             f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@"
-            f"{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+            f"{self.postgres_host}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         )
 
     @property
@@ -82,7 +89,7 @@ class Settings(BaseSettings):
             return url
         return (
             f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@"
-            f"{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+            f"{self.postgres_host}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         )
 
 
