@@ -2,7 +2,7 @@
 Complaint service.
 
 Implements all core business rules:
-- Triage orchestration and metadata assignment
+- Triage orchestration, caching, and metadata assignment
 - State machine transition validation
 - Complaint creation and retrieval workflow
 - Aggregate statistics calculation
@@ -11,16 +11,20 @@ Implements all core business rules:
 import uuid
 from typing import Any
 
+from redis.asyncio import Redis
+
 from app.models.complaint import (
     CategoryEnum,
     Complaint,
     PriorityEnum,
     StatusEnum,
 )
-from app.providers.triage import TriageProvider
+from app.providers.triage.base import TriageProvider
+from app.providers.triage.rules import RuleBasedTriage
 from app.repositories.complaint_repository import ComplaintRepository
 from app.schemas.complaint import ComplaintCreate
 from app.services.state_machine import validate_transition
+from app.services.triage_service import TriageService
 
 
 class ComplaintNotFoundError(Exception):
@@ -37,15 +41,30 @@ class ComplaintService:
     def __init__(
         self,
         repository: ComplaintRepository,
-        triage_provider: TriageProvider,
+        triage_provider: TriageProvider | None = None,
+        triage_service: TriageService | None = None,
     ) -> None:
         self.repository = repository
-        self.triage_provider = triage_provider
+        if triage_service is not None:
+            self.triage_service = triage_service
+            self.triage_provider = triage_service.primary_provider
+        elif triage_provider is not None:
+            self.triage_provider = triage_provider
+            self.triage_service = TriageService(primary_provider=triage_provider)
+        else:
+            default_provider = RuleBasedTriage()
+            self.triage_provider = default_provider
+            self.triage_service = TriageService(primary_provider=default_provider)
 
-    async def create_complaint(self, data: ComplaintCreate) -> Complaint:
+    async def create_complaint(
+        self,
+        data: ComplaintCreate,
+        redis: Redis | None = None,
+    ) -> Complaint:
         """
         Create and persist a new complaint.
         Runs triage orchestration if category or priority are not explicitly supplied.
+        Enforces strict PII exclusion: reporter_contact is NEVER sent to AI providers.
         """
         category = data.category
         priority = data.priority
@@ -53,22 +72,26 @@ class ComplaintService:
         triaged_by: str | None = None
         triage_latency_ms: int | None = None
 
-        # If category or priority is missing, run triage inference
-        if category is None or priority is None:
-            triage_result = await self.triage_provider.triage(data.text, data.location)
-            if category is None:
-                category = triage_result.category
-            if priority is None:
-                priority = triage_result.priority
-            ai_summary = triage_result.ai_summary
-            triaged_by = triage_result.triaged_by
-            triage_latency_ms = triage_result.triage_latency_ms
-        else:
-            # Caller supplied explicit values; generate summary
-            triage_result = await self.triage_provider.triage(data.text, data.location)
-            ai_summary = triage_result.ai_summary
+        # Execute triage orchestration (handles content-hash cache, primary provider, fallback)
+        outcome = await self.triage_service.execute_triage(
+            text=data.text,
+            location=data.location,
+            redis=redis,
+        )
+
+        if category is None:
+            category = outcome.result.category
+        if priority is None:
+            priority = outcome.result.priority
+
+        ai_summary = outcome.result.summary
+        triage_latency_ms = outcome.triage_latency_ms
+
+        if data.category is not None and data.priority is not None:
+            # Caller supplied explicit values; mark as manual user classification
             triaged_by = "user:manual"
-            triage_latency_ms = 0
+        else:
+            triaged_by = outcome.triaged_by
 
         complaint = Complaint(
             text=data.text,

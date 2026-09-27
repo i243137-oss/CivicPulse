@@ -46,7 +46,7 @@ async def create_complaint(
     Validates input, triggers triage orchestration, and persists the record.
     Invalidates statistics cache so subsequent stats requests fetch fresh data.
     """
-    complaint = await service.create_complaint(payload)
+    complaint = await service.create_complaint(payload, redis=redis)
     await cache_service.invalidate_stats_cache(redis)
     return ComplaintResponse.model_validate(complaint)
 

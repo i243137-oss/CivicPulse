@@ -105,6 +105,19 @@ class Settings(BaseSettings):
     RATE_LIMIT_PER_MINUTE: int = 60
     RATE_LIMIT_WINDOW_SECONDS: int = 60
 
+    # --- AI Triage (Phase 4) -------------------------------------------------
+    # Provider selection: "llm" | "ollama" | "rules" | "simulated"
+    TRIAGE_PROVIDER: str = "simulated"
+    LLM_API_KEY: str | None = None
+    LLM_BASE_URL: str = "https://api.groq.com/openai/v1"
+    LLM_MODEL: str = "llama-3.1-8b-instant"
+    LLM_TIMEOUT_SECONDS: float = 10.0
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_MODEL: str = "llama3.2:1b"
+    OLLAMA_TIMEOUT_SECONDS: float = 10.0
+    TRIAGE_CACHE_TTL: int = 86400  # 24-hour TTL for content-hash triage results
+    TRIAGE_CACHE_ENABLED: bool = True
+
     @property
     def REDIS_CONNECTION_URL(self) -> str:
         """Construct Redis connection URL."""

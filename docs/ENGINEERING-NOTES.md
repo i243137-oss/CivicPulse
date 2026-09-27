@@ -93,6 +93,31 @@ Complaint status transitions strictly adhere to the transition table:
 
 ---
 
+## Phase 4 — AI Triage Engine and Architecture
+
+### Four-Layer Triage Providers
+The AI triage system is designed for high reliability, zero-downtime tolerance, and multi-environment portability:
+- **`LLMTriage`** (`backend/app/providers/triage/llm.py`): Primary cloud provider targeting OpenAI-compatible endpoints (Groq, Google AI Studio Gemini). Enforces 10.0s hard-cap timeout, structured JSON mode, and single jittered retry (`0.5s + uniform(0.1, 0.4)`).
+- **`OllamaTriage`** (`backend/app/providers/triage/ollama.py`): Local, air-gapped containerized provider (`llama3.2:1b`) for environments requiring 100% data residency and zero external network transmission.
+- **`RuleBasedTriage`** (`backend/app/providers/triage/rules.py`): Zero-dependency keyword and urgency heuristic engine. Always available, sub-millisecond execution, guaranteed zero exceptions.
+- **`SimulatedTriage`** (`backend/app/providers/triage/simulated.py`): Deterministic test fake with failure injection (`timeout`, `rate_limit`, `server_error`, `malformed_json`, `always_raise`) used in CI so automated tests never require a paid API key.
+
+### Resilience and Deterministic Fallback
+- **Hard-Cap Timeout**: 10.0 seconds cap on all AI inference requests.
+- **Selective Jittered Retry**: Retries at most once for transient failures: timeout, HTTP 429, or HTTP 5xx. Never retries client error HTTP 400.
+- **Fallback Chain**: When primary AI provider fails (timeout, rate limit, server error, or invalid JSON output), `TriageService` automatically catches the error, logs diagnostics, invokes `RuleBasedTriage`, and records `triaged_by = 'rules fallback'` on the persisted complaint. The citizen intake submission succeeds with HTTP 201 Created.
+- **Content-Hash Caching (24-Hour TTL)**: SHA-256 hash of normalized complaint text and location (`civicpulse:triage:cache:<hash>`) stores triage outcomes in Redis for 24 hours (86,400s). Duplicate reports of the same municipal malfunction cost zero additional AI tokens.
+
+### Security and PII Governance
+- **Prompt-Injection Guardrails**: Citizen text is encapsulated in `<complaint_untrusted_input>` XML tags in the system prompt with strict instructions forbidding prompt overrides, role modifications, or code execution.
+- **Structured Schema Validation**: Model output is parsed and strictly validated against `TriageResult` Pydantic schema before acceptance. Prose, code fences, or hallucinated categories outside the enum are rejected safely.
+- **PII Stripping at Service Boundary**: Citizen contact information (`reporter_contact`) is stored in PostgreSQL but **never** passed to the triage provider interface (`triage(text, location)`). Formally documented in `docs/adr/0004-pii-and-data-governance.md`.
+
+---
+
 ## Lessons Learned
 
-*To be updated as the project progresses.*
+1. **Structured Output Enforcement in Production**: Free-tier LLMs occasionally wrap JSON in explanatory text or markdown code fences (````json ... ````). Robust regex extraction combined with Pydantic model validation prevents runtime crashes and ensures enum compliance.
+2. **Resilient Triage Fallback**: AI services are inherently non-deterministic and subject to upstream rate limits and network degradation. An automated intake platform must treat the LLM as an opportunistic optimization, with an immediate, deterministic heuristic fallback path (`RuleBasedTriage`) ensuring uninterrupted citizen service.
+3. **Data Residency and Minimization**: By stripping `reporter_contact` prior to invoking external inference, municipal compliance is preserved without compromising classification accuracy.
+

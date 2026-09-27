@@ -1,21 +1,23 @@
 """
 Metadata and observability routes.
 
-Surfaces active triage provider and telemetry.
+Surfaces active triage provider, telemetry, and latency metrics.
 """
+
+from typing import Any
 
 from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel
 
-from app.dependencies import get_triage_provider
-from app.providers.triage import TriageProvider
+from app.dependencies import get_triage_service
+from app.services.triage_service import TriageService
 
 router = APIRouter(prefix="/api/meta", tags=["metadata"])
 
 
 class ProviderInfoResponse(BaseModel):
     active_provider: str
-    recent_outcomes: list[dict] = []
+    recent_outcomes: list[dict[str, Any]] = []
 
 
 @router.get(
@@ -25,11 +27,14 @@ class ProviderInfoResponse(BaseModel):
     summary="Active triage provider and recent outcomes",
 )
 def get_providers_meta(
-    provider: TriageProvider = Depends(get_triage_provider),
+    triage_service: TriageService = Depends(get_triage_service),
 ) -> ProviderInfoResponse:
-    """Return active provider configuration and triage telemetry."""
-    provider_name = getattr(provider, "provider_id", provider.__class__.__name__)
+    """Return active provider configuration, recent outcomes, and triage telemetry."""
+    provider = triage_service.primary_provider
+    provider_name = getattr(provider, "name", getattr(provider, "provider_id", provider.__class__.__name__))
+    recent = triage_service.get_recent_outcomes()
+
     return ProviderInfoResponse(
         active_provider=provider_name,
-        recent_outcomes=[],
+        recent_outcomes=recent,
     )
