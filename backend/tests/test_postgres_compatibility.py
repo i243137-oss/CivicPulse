@@ -111,15 +111,20 @@ def test_alembic_postgres_offline_migration_scripts() -> None:
     env = os.environ.copy()
     env["DATABASE_URL"] = "postgresql://postgres:postgres@localhost:5432/civicpulse"
 
+    backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    import sys
+
     # Test upgrade --sql
     res_up = subprocess.run(
         [
-            "/home/umair_hassan/CivicPulse/.venv/bin/alembic",
+            sys.executable,
+            "-m",
+            "alembic",
             "upgrade",
             "head",
             "--sql",
         ],
-        cwd="/home/umair_hassan/CivicPulse/backend",
+        cwd=backend_dir,
         env=env,
         capture_output=True,
         text=True,
@@ -136,12 +141,14 @@ def test_alembic_postgres_offline_migration_scripts() -> None:
     # Test downgrade --sql
     res_down = subprocess.run(
         [
-            "/home/umair_hassan/CivicPulse/.venv/bin/alembic",
+            sys.executable,
+            "-m",
+            "alembic",
             "downgrade",
             "001_initial_complaints:base",
             "--sql",
         ],
-        cwd="/home/umair_hassan/CivicPulse/backend",
+        cwd=backend_dir,
         env=env,
         capture_output=True,
         text=True,

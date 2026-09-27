@@ -69,7 +69,11 @@ def test_alembic_upgrade_and_downgrade() -> None:
         # Verify table dropped
         inspector_after = inspect(sync_engine)
         assert "complaints" not in inspector_after.get_table_names()
+        sync_engine.dispose()
 
     finally:
-        if os.path.exists(tmp_db_path):
-            os.remove(tmp_db_path)
+        try:
+            if os.path.exists(tmp_db_path):
+                os.remove(tmp_db_path)
+        except OSError:
+            pass
