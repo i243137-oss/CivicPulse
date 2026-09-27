@@ -20,6 +20,9 @@ WORKDIR /app
 
 COPY --from=builder /install /usr/local
 COPY app ./app
+COPY alembic ./alembic
+COPY alembic.ini .
+COPY scripts ./scripts
 
 USER app
 

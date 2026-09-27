@@ -47,6 +47,44 @@ class Settings(BaseSettings):
     # --- API ----------------------------------------------------------------
     API_V1_PREFIX: str = "/api"
 
+    # --- Database (PostgreSQL / async access) --------------------------------
+    POSTGRES_SERVER: str = "localhost"
+    POSTGRES_PORT: int = 5432
+    POSTGRES_USER: str = "postgres"
+    POSTGRES_PASSWORD: str = "postgres"
+    POSTGRES_DB: str = "civicpulse"
+    DATABASE_URL: str | None = None
+
+    @property
+    def ASYNC_DATABASE_URL(self) -> str:
+        """Async database URL for SQLAlchemy async engine."""
+        if self.DATABASE_URL:
+            url = self.DATABASE_URL
+            if url.startswith("postgresql://"):
+                return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            if url.startswith("postgres://"):
+                return url.replace("postgres://", "postgresql+asyncpg://", 1)
+            return url
+        return (
+            f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@"
+            f"{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        )
+
+    @property
+    def SYNC_DATABASE_URL(self) -> str:
+        """Sync database URL for Alembic migrations and synchronous tooling."""
+        if self.DATABASE_URL:
+            url = self.DATABASE_URL
+            if url.startswith("postgresql+asyncpg://"):
+                return url.replace("postgresql+asyncpg://", "postgresql://", 1)
+            if url.startswith("sqlite+aiosqlite://"):
+                return url.replace("sqlite+aiosqlite://", "sqlite://", 1)
+            return url
+        return (
+            f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@"
+            f"{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        )
+
 
 @lru_cache
 def get_settings() -> Settings:
