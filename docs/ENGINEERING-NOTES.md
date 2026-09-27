@@ -115,7 +115,54 @@ The AI triage system is designed for high reliability, zero-downtime tolerance, 
 
 ---
 
+## Phase 5 — Frontend Implementation (Member B)
+
+### Stack and Architectural Boundaries
+- **Core Stack**: React 18 + Vite + TypeScript.
+- **Strict Presentation Boundary**: The frontend owns 100% presentation, interaction, validation feedback, and telemetry display. It owns **zero** business rules.
+  - Triage category, priority, and AI summary are determined by backend LLM/rules providers.
+  - Valid status transitions are governed by the backend finite state machine (`VALID_TRANSITIONS` mirrored from the backend transition table).
+  - Terminal statuses (`resolved`, `rejected`) dynamically disable transition actions.
+  - Any rejected transition surfaces the server's `409 Conflict` message verbatim in the UI rather than a generic error toast.
+
+### Key Views Implemented
+1. **Intake & Submission (`SubmitPage.tsx`)**:
+   - Free-text complaint input (10–2000 chars), location (3–200 chars), and optional contact.
+   - Client-side validation mirrors backend Pydantic bounds to prevent unnecessary roundtrips.
+   - Honest loading state: displays `"Submitting & Triaging…"` with disabled actions to transparently represent multi-second LLM inference latency.
+   - On success, smoothly transitions to the issue detail view showing assigned category, priority, AI summary, and triage provider.
+2. **Operations Dashboard (`DashboardPage.tsx`)**:
+   - High-level metric cards for total issues and breakdown by status.
+   - Progress bar distributions across categories and priorities.
+   - Observability card displaying active AI triage provider, content-hash cache hit rate, and latency history table.
+   - **`X-Cache` Telemetry**: Directly inspects the `X-Cache` response header (`HIT` or `MISS`) from Redis and renders a prominent status badge.
+3. **Complaints Listing & Filter Queue (`ComplaintsPage.tsx`)**:
+   - Filterable by Category, Priority, and Status with server-side pagination (10 items/page).
+   - Direct status transition actions on list cards for municipal operators.
+4. **Issue Detail & State Machine Actions (`ComplaintDetailPage.tsx`)**:
+   - Full inspection of complaint text, location, reporter information, and AI triage telemetry.
+   - Finite state machine transition buttons displaying next allowed states according to current status.
+   - Terminal state alert when issue is marked `resolved` or `rejected`.
+
+### Runtime Configuration & Build-Once-Deploy-Many
+- Build-time baked backend URLs are strictly forbidden.
+- The centralized typed client (`src/api/client.ts`) uses relative `/api` paths.
+- In local development, Vite proxies `/api` to `http://localhost:8000`.
+- In production containers and Kubernetes, Nginx / Ingress reverse proxies `/api` to the backend cluster, guaranteeing that the exact same frontend container image runs in all environments.
+- Architectural decision formally documented in `docs/adr/0003-frontend-runtime-config-and-proxy.md`.
+
+### Component Testing Suite (Vitest + React Testing Library)
+- ≥ 5 comprehensive component tests passing in CI:
+  1. `SubmitPage.test.tsx`: Form validation, honest triage loading state, error display.
+  2. `ComplaintsPage.test.tsx`: Listing rendering, filter updates, verbatim 409 error propagation.
+  3. `DashboardPage.test.tsx`: Total counters, `X-Cache` header display, retry on network failure.
+  4. `ComplaintDetailPage.test.tsx`: Full issue telemetry, state transition workflow, terminal state.
+  5. `ErrorBoundary.test.tsx`: Unhandled render crash capture, fallback UI, recovery on reset.
+
+---
+
 ## Lessons Learned
+
 
 1. **Structured Output Enforcement in Production**: Free-tier LLMs occasionally wrap JSON in explanatory text or markdown code fences (````json ... ````). Robust regex extraction combined with Pydantic model validation prevents runtime crashes and ensures enum compliance.
 2. **Resilient Triage Fallback**: AI services are inherently non-deterministic and subject to upstream rate limits and network degradation. An automated intake platform must treat the LLM as an opportunistic optimization, with an immediate, deterministic heuristic fallback path (`RuleBasedTriage`) ensuring uninterrupted citizen service.
