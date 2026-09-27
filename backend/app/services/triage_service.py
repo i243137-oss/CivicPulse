@@ -5,7 +5,7 @@ Implements Assignment Section 2.5 requirements:
 - Content-hash caching in Redis with 24-hour TTL.
 - Eliminates redundant inference for duplicate complaints.
 - Deterministic fallback chain: falls back to RuleBasedTriage on any primary AI failure.
-- Records triaged_by = 'rules fallback' upon fallback.
+- Records triaged_by = 'rules:fallback' upon fallback.
 - Records triage_latency_ms and maintains telemetry metrics.
 - Enforces strict PII exclusion (only text and location are passed for classification).
 """
@@ -109,7 +109,7 @@ class TriageService:
 
         1. Check content-hash cache (24h TTL).
         2. On cache miss, execute primary AI provider.
-        3. On failure/timeout, trigger fallback to RuleBasedTriage (triaged_by = 'rules fallback').
+        3. On failure/timeout, trigger fallback to RuleBasedTriage (triaged_by = 'rules:fallback').
         4. Cache successful result and record telemetry.
         """
         settings = get_settings()
@@ -153,7 +153,7 @@ class TriageService:
             # 3. Fallback chain: Primary AI provider failed
             latency_ms = max(1, int((time.perf_counter() - start_time) * 1000))
             fallback_used = True
-            triaged_by = "rules fallback"
+            triaged_by = "rules:fallback"
             logger.warning(
                 "Primary triage provider '%s' failed (%s) after %dms. Falling back to %s.",
                 self.primary_provider.name,
@@ -195,3 +195,31 @@ class TriageService:
     def get_recent_outcomes(self) -> list[dict[str, Any]]:
         """Return list of recent triage execution outcomes."""
         return list(self._recent_outcomes)
+
+    async def get_cache_metrics(self, redis: Redis | None = None) -> dict[str, Any]:
+        """Retrieve measured content-hash cache metrics (hits, misses, hit rate)."""
+        hits = 0
+        misses = 0
+
+        if redis is not None:
+            try:
+                raw_hits = await redis.get(self.METRIC_HITS_KEY)
+                raw_misses = await redis.get(self.METRIC_MISSES_KEY)
+                hits = int(raw_hits) if raw_hits else 0
+                misses = int(raw_misses) if raw_misses else 0
+            except Exception as exc:
+                logger.warning("Error fetching cache metrics from Redis: %s", exc)
+        else:
+            hits = sum(1 for o in self._recent_outcomes if o.get("cached"))
+            misses = sum(1 for o in self._recent_outcomes if not o.get("cached"))
+
+        total = hits + misses
+        hit_rate = round(hits / total, 4) if total > 0 else 0.0
+
+        return {
+            "hits": hits,
+            "misses": misses,
+            "total_requests": total,
+            "hit_rate": hit_rate,
+        }
+

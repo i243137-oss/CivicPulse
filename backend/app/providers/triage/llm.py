@@ -51,7 +51,7 @@ class LLMTriage:
         self.api_key = api_key or settings.LLM_API_KEY
         self.base_url = (base_url or settings.LLM_BASE_URL).rstrip("/")
         self.model = model or settings.LLM_MODEL
-        self.timeout_seconds = timeout_seconds or settings.LLM_TIMEOUT_SECONDS
+        self.timeout_seconds = min(float(timeout_seconds or settings.LLM_TIMEOUT_SECONDS), 10.0)
 
     async def triage(self, text: str, location: str) -> TriageResult:
         """
@@ -61,8 +61,8 @@ class LLMTriage:
             TriageTimeoutError: On 10s timeout after retry.
             TriageRateLimitError: On HTTP 429 after retry.
             TriageServerError: On HTTP 5xx after retry.
-            TriageValidationError: On malformed or non-conforming model output.
-            TriageError: If missing API key or unrecoverable client error (HTTP 400).
+            TriageValidationError: On malformed or non-conforming model output (not retried).
+            TriageError: If missing API key or client error (HTTP 400, not retried).
         """
         if not self.api_key:
             raise TriageError("Missing LLM_API_KEY for hosted provider", provider=self.name)
@@ -87,7 +87,7 @@ class LLMTriage:
         endpoint = f"{self.base_url}/chat/completions"
         timeout = httpx.Timeout(self.timeout_seconds, connect=5.0)
 
-        # Attempt 1, followed by at most 1 jittered retry on retryable errors
+        # Attempt 1, followed by at most 1 jittered retry strictly on timeout, 429, or 5xx
         max_attempts = 2
         last_error: Exception | None = None
 
@@ -104,31 +104,24 @@ class LLMTriage:
                     response = await client.post(endpoint, json=payload, headers=headers)
                     elapsed = time.perf_counter() - start_time
 
-                    # HTTP 400 Bad Request: NEVER retry
-                    if response.status_code == 400:
-                        raise TriageError(
-                            f"LLM provider rejected request (HTTP 400): {response.text[:200]}",
-                            provider=self.name,
-                        )
-
-                    # HTTP 429 Rate Limit
+                    # HTTP 429 Rate Limit (RETRYABLE)
                     if response.status_code == 429:
                         raise TriageRateLimitError(
                             f"LLM provider rate limit exceeded (HTTP 429): {response.text[:100]}",
                             provider=self.name,
                         )
 
-                    # HTTP 5xx Server Error
+                    # HTTP 5xx Server Error (RETRYABLE)
                     if response.status_code >= 500:
                         raise TriageServerError(
                             f"LLM provider server error (HTTP {response.status_code})",
                             provider=self.name,
                         )
 
-                    # Any other error code >= 400
+                    # Any other error code >= 400 (e.g. 400, 401, 403, 404): NEVER RETRY
                     if response.status_code >= 400:
                         raise TriageError(
-                            f"LLM provider returned HTTP {response.status_code}",
+                            f"LLM provider returned non-retryable HTTP {response.status_code}: {response.text[:200]}",
                             provider=self.name,
                         )
 
@@ -140,34 +133,17 @@ class LLMTriage:
                     return extract_and_validate_triage_json(raw_content, provider_name=self.name)
 
                 except (TimeoutError, httpx.TimeoutException) as exc:
+                    # Timeout (RETRYABLE)
                     last_error = TriageTimeoutError(
                         f"LLM request timed out after {self.timeout_seconds:.1f}s: {exc}",
                         provider=self.name,
                     )
                 except (TriageRateLimitError, TriageServerError) as exc:
+                    # HTTP 429 or 5xx (RETRYABLE)
                     last_error = exc
-                except httpx.HTTPStatusError as exc:
-                    if exc.response.status_code >= 500:
-                        last_error = TriageServerError(
-                            f"LLM server error HTTP {exc.response.status_code}",
-                            provider=self.name,
-                        )
-                    elif exc.response.status_code == 429:
-                        last_error = TriageRateLimitError(
-                            "LLM provider rate limit exceeded",
-                            provider=self.name,
-                        )
-                    else:
-                        # Non-retryable HTTP error (e.g. 401, 403, 404)
-                        raise TriageError(
-                            f"LLM provider returned unrecoverable HTTP {exc.response.status_code}",
-                            provider=self.name,
-                        ) from exc
-                except httpx.RequestError as exc:
-                    last_error = TriageServerError(
-                        f"LLM network connectivity failure: {exc}",
-                        provider=self.name,
-                    )
+                except Exception as exc:
+                    # Everything else (e.g. connection errors, 400, validation error): NO RETRY
+                    raise exc
 
                 # If this was attempt 1 and error is retryable, perform jittered sleep
                 if attempt < max_attempts:
@@ -180,10 +156,11 @@ class LLMTriage:
                     )
                     await asyncio.sleep(sleep_time)
 
-        # Exhausted attempts
+        # Exhausted retry attempts
         if last_error:
             raise last_error
         raise TriageError("LLM triage failed with unknown state", provider=self.name)
+
 
 
 # Alias for backward compatibility

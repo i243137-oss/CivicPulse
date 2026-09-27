@@ -46,7 +46,7 @@ Four distinct providers are implemented:
    - Seeded, non-network test fake supporting failure injection (`timeout`, `rate_limit`, `server_error`, `malformed_json`).
 
 ### Fallback Chain
-All provider calls are orchestrated by `TriageService`. If the primary provider (`LLMTriage` or `OllamaTriage`) fails for any reason after its single retry, the system immediately falls back to `RuleBasedTriage`, logs a warning with provider details and latency, and records `triaged_by = "rules fallback"` on the persisted complaint. The citizen submission always returns HTTP 201 Created.
+All provider calls are orchestrated by `TriageService`. If the primary provider (`LLMTriage` or `OllamaTriage`) fails for any reason after its single retry, the system immediately falls back to `RuleBasedTriage`, logs a warning with provider details and latency, and records `triaged_by = "rules:fallback"` on the persisted complaint. The citizen submission always returns HTTP 201 Created.
 
 ### Content-Hash Caching
 To prevent redundant inference on duplicate complaints (e.g. multiple neighbors reporting the same burst water pipe), `TriageService` hashes normalized complaint text and location (`SHA-256`) and caches results in Redis with a 24-hour TTL.

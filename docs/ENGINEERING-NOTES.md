@@ -104,9 +104,9 @@ The AI triage system is designed for high reliability, zero-downtime tolerance, 
 
 ### Resilience and Deterministic Fallback
 - **Hard-Cap Timeout**: 10.0 seconds cap on all AI inference requests.
-- **Selective Jittered Retry**: Retries at most once for transient failures: timeout, HTTP 429, or HTTP 5xx. Never retries client error HTTP 400.
-- **Fallback Chain**: When primary AI provider fails (timeout, rate limit, server error, or invalid JSON output), `TriageService` automatically catches the error, logs diagnostics, invokes `RuleBasedTriage`, and records `triaged_by = 'rules fallback'` on the persisted complaint. The citizen intake submission succeeds with HTTP 201 Created.
-- **Content-Hash Caching (24-Hour TTL)**: SHA-256 hash of normalized complaint text and location (`civicpulse:triage:cache:<hash>`) stores triage outcomes in Redis for 24 hours (86,400s). Duplicate reports of the same municipal malfunction cost zero additional AI tokens.
+- **Selective Jittered Retry**: Retries at most once strictly for transient failures: timeout, HTTP 429, or HTTP 5xx. Never retries client error HTTP 400 or connection errors.
+- **Fallback Chain**: When primary AI provider fails (timeout, rate limit, server error, or invalid JSON output), `TriageService` automatically catches the error, logs diagnostics, invokes `RuleBasedTriage`, and records `triaged_by = 'rules:fallback'` on the persisted complaint. The citizen intake submission succeeds with HTTP 201 Created.
+- **Content-Hash Caching (24-Hour TTL & Hit Rate Telemetry)**: SHA-256 hash of normalized complaint text and location (`civicpulse:triage:cache:<hash>`) stores triage outcomes in Redis for 24 hours (86,400s). Duplicate reports of the same municipal malfunction cost zero additional AI tokens. Real-time cache metrics (`hits`, `misses`, `total_requests`, and calculated `hit_rate`) are exposed via `GET /api/meta/providers`.
 
 ### Security and PII Governance
 - **Prompt-Injection Guardrails**: Citizen text is encapsulated in `<complaint_untrusted_input>` XML tags in the system prompt with strict instructions forbidding prompt overrides, role modifications, or code execution.

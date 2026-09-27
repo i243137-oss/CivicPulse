@@ -47,5 +47,12 @@ We enforce strict data minimization, architectural field isolation, and local in
   - Zero citizen phone numbers, emails, or identity markers are ever leaked to third-party model providers.
   - Transparent audit trail: the exact data sent to external endpoints is limited strictly to public infrastructure problem descriptions.
   - Clear compliance documentation for municipal data protection officers (DPO).
-- **Negative**:
-  - If a citizen writes their name or phone number directly inside the free-text description body (e.g. "Call me at 0300..."), that snippet could be transmitted. However, the system's output instructions restrict model behavior to category/priority JSON extraction, and future work can add automated in-flight regex PII masking if deemed necessary.
+- **Negative & Trade-off Analysis**:
+  - **Citizen Free-Text Inline Contact Exposure**: If a citizen voluntarily types their name or phone number directly inside the free-text description body (e.g., *"Call me, Ali, at 0300-1234567 regarding the leak"*), that string reaches the selected inference provider.
+  - **Rationale for Deferring Inline Regex Masking**:
+    1. *Context Preservation for Physical Infrastructure*: Automated aggressive regex redaction frequently corrupts vital municipal location cues (e.g., redacting "House 14, Street 9, Pole #302" into "House [REDACTED], Street [REDACTED]"). Municipal field crews require uncorrupted text to locate and repair hazards.
+    2. *Performance and Latency*: Applying multi-pattern regex scrubbing or NER tokenizers on the critical submission path introduces latency overhead and risks catastrophic backtracking on untrusted user strings.
+    3. *Data Minimization by Architectural Boundary*: The high-risk structured identifier (`reporter_contact`) is 100% stripped at the interface layer before provider execution.
+    4. *Offline Alternative for Strict Privacy Mandates*: For municipal jurisdictions with strict zero-third-party leakage requirements, `TRIAGE_PROVIDER=ollama` or `TRIAGE_PROVIDER=rules` is deployed, providing complete data residency where zero bytes leave municipal hardware.
+    5. Masking in free-text is therefore intentionally deferred to future pipeline enhancements, backed by existing local-inference options for privacy-critical deployments.
+

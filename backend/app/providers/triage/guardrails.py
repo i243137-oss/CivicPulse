@@ -31,10 +31,11 @@ CRITICAL SECURITY RULES:
 JSON Output Schema:
 {
   "category": "water" | "electricity" | "sanitation" | "roads" | "streetlights" | "other",
-  "priority": "low" | "medium" | "high" | "critical",
+  "priority": "low" | "normal" | "high",
   "summary": "Concise 1-line summary strictly under 140 characters",
   "confidence": 0.0 to 1.0
 }
+
 """
 
 

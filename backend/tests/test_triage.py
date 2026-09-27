@@ -4,8 +4,8 @@ Unit and integration tests for CivicPulse AI triage (Phase 4).
 Validates all Phase 4 Exit Gate criteria:
 1. TriageResult Pydantic schema validation and constraints.
 2. Every provider implementation is testable (LLMTriage, OllamaTriage, RuleBasedTriage, SimulatedTriage).
-3. 10-second timeout hard cap and single jittered retry logic (retries 429, 5xx, timeout; never retries 400).
-4. Deterministic fallback chain: when AI provider fails or raises, complaint submission succeeds with HTTP 201 and triaged_by == 'rules fallback'.
+3. 10-second timeout hard cap and single jittered retry logic (retries 429, 5xx, timeout; never retries 400 or connection errors).
+4. Deterministic fallback chain: when AI provider fails or raises, complaint submission succeeds with HTTP 201 and triaged_by == 'rules:fallback'.
 5. Structured output validation safely rejects malformed or unparseable JSON.
 6. Content-hash caching in Redis with 24-hour TTL eliminates redundant duplicate inference.
 7. Prompt-injection guardrails protect against instruction-override attempts.
@@ -239,6 +239,63 @@ async def test_llm_triage_never_retries_400_bad_request() -> None:
             assert mock_sleep.call_count == 0
 
 
+@pytest.mark.asyncio
+async def test_llm_triage_never_retries_connection_error() -> None:
+    """LLMTriage never retries connection errors (only timeout, 429, 5xx are eligible)."""
+    llm = LLMTriage(api_key="mock-key")
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, side_effect=httpx.ConnectError("Connection refused")):
+        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            with pytest.raises(httpx.ConnectError):
+                await llm.triage("Issue", "Location")
+            assert mock_sleep.call_count == 0
+
+
+def test_triage_provider_timeout_hard_cap() -> None:
+    """Provider constructors enforce a strict 10.0-second hard cap regardless of argument or config."""
+    llm = LLMTriage(api_key="mock", timeout_seconds=30.0)
+    assert llm.timeout_seconds == 10.0
+
+    ollama = OllamaTriage(timeout_seconds=25.0)
+    assert ollama.timeout_seconds == 10.0
+
+
+@pytest.mark.asyncio
+async def test_ollama_triage_retries_only_timeout_429_5xx() -> None:
+    """OllamaTriage retries strictly on timeout, 429, and 5xx; never on connection errors or client errors."""
+    ollama = OllamaTriage()
+
+    # 1. Timeout -> retried
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, side_effect=httpx.TimeoutException("Timeout")):
+        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            with pytest.raises(TriageTimeoutError):
+                await ollama.triage("Issue", "Location")
+            assert mock_sleep.call_count == 1
+
+    # 2. HTTP 429 -> retried
+    resp_429 = httpx.Response(status_code=429, text="Too Many Requests")
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=resp_429):
+        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            with pytest.raises(TriageRateLimitError):
+                await ollama.triage("Issue", "Location")
+            assert mock_sleep.call_count == 1
+
+    # 3. HTTP 500 -> retried
+    resp_500 = httpx.Response(status_code=500, text="Internal Server Error")
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=resp_500):
+        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            with pytest.raises(TriageServerError):
+                await ollama.triage("Issue", "Location")
+            assert mock_sleep.call_count == 1
+
+    # 4. Connection error -> NEVER retried
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, side_effect=httpx.ConnectError("Refused")):
+        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            with pytest.raises(httpx.ConnectError):
+                await ollama.triage("Issue", "Location")
+            assert mock_sleep.call_count == 0
+
+
 # ==============================================================================
 # 5. OllamaTriage Provider Tests
 # ==============================================================================
@@ -307,7 +364,7 @@ def test_prompt_injection_isolation() -> None:
 
 @pytest.mark.asyncio
 async def test_fallback_chain_on_primary_ai_failure() -> None:
-    """When primary provider fails, TriageService falls back to rules and records 'rules fallback'."""
+    """When primary provider fails, TriageService falls back to rules and records 'rules:fallback'."""
     failing_primary = SimulatedTriage(fail_mode="timeout")
     service = TriageService(primary_provider=failing_primary)
 
@@ -319,7 +376,7 @@ async def test_fallback_chain_on_primary_ai_failure() -> None:
 
     # Assert fallback succeeded
     assert outcome.fallback_used is True
-    assert outcome.triaged_by == "rules fallback"
+    assert outcome.triaged_by == "rules:fallback"
     assert outcome.result.category == CategoryEnum.ELECTRICITY
     assert outcome.result.priority == PriorityEnum.HIGH
     assert outcome.triage_latency_ms >= 1
@@ -357,8 +414,16 @@ async def test_content_hash_caching_eliminates_duplicate_inference() -> None:
     assert outcome2.result.category == outcome1.result.category
     assert outcome2.result.priority == outcome1.result.priority
 
+    # Verify cache metrics reporting
+    metrics = await service.get_cache_metrics(fake_redis_client)
+    assert metrics["hits"] == 1
+    assert metrics["misses"] == 1
+    assert metrics["total_requests"] == 2
+    assert metrics["hit_rate"] == 0.5
+
     await fake_redis_client.flushall()
     await fake_redis_client.aclose()
+
 
 
 # ==============================================================================
@@ -399,7 +464,7 @@ def test_exit_gate_complaint_submission_falls_back_safely_when_ai_crashes(
     """
     Mandatory Exit Gate Requirement:
     Given an AI provider that always raises, POST /api/complaints STILL returns 201 Created
-    and persists triaged_by == 'rules fallback'.
+    and persists triaged_by == 'rules:fallback'.
     """
     from app.dependencies import get_triage_service
 
@@ -422,7 +487,7 @@ def test_exit_gate_complaint_submission_falls_back_safely_when_ai_crashes(
         assert response.status_code == 201
         data = response.json()
         assert data["category"] == "roads"
-        assert data["triaged_by"] == "rules fallback"
+        assert data["triaged_by"] == "rules:fallback"
         assert data["ai_summary"] is not None
         assert data["triage_latency_ms"] is not None
     finally:
@@ -455,3 +520,40 @@ def test_exit_gate_prompt_injection_attempt_categorized_by_underlying_issue(
     # Real problem is electricity / fire / spark, not streetlights
     assert data["category"] == "electricity"
     assert data["priority"] in ["high", "critical"]
+
+
+def test_meta_providers_reports_cache_hit_rate(client: TestClient) -> None:
+    """GET /api/meta/providers exposes measured and reported cache metrics including hit_rate."""
+    # 1. Check initial meta endpoint response structure
+    res = client.get("/api/meta/providers")
+    assert res.status_code == 200
+    initial_meta = res.json()
+    assert "cache_metrics" in initial_meta
+    metrics_schema = initial_meta["cache_metrics"]
+    assert "hits" in metrics_schema
+    assert "misses" in metrics_schema
+    assert "total_requests" in metrics_schema
+    assert "hit_rate" in metrics_schema
+
+    # 2. First complaint submission -> cache miss
+    complaint_payload = {
+        "text": "Unique street fault: collapsed manhole cover on 5th avenue",
+        "location": "Sector F-6/2, Islamabad",
+        "reporter_contact": "+923009998877",
+    }
+    r1 = client.post("/api/complaints", json=complaint_payload)
+    assert r1.status_code == 201
+
+    # 3. Second identical complaint submission -> cache hit
+    r2 = client.post("/api/complaints", json=complaint_payload)
+    assert r2.status_code == 201
+
+    # 4. Telemetry check: hit rate must now be reported and non-zero
+    res_after = client.get("/api/meta/providers")
+    assert res_after.status_code == 200
+    reported_metrics = res_after.json()["cache_metrics"]
+    assert reported_metrics["hits"] >= 1
+    assert reported_metrics["misses"] >= 1
+    assert reported_metrics["total_requests"] >= 2
+    assert 0.0 < reported_metrics["hit_rate"] <= 1.0
+

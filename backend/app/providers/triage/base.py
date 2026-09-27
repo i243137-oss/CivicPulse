@@ -76,11 +76,13 @@ class TriageResult(BaseModel):
         if isinstance(data, dict):
             if "summary" not in data and "ai_summary" in data:
                 data["summary"] = data["ai_summary"]
-            # Map 'critical' urgency to PriorityEnum.HIGH
+            # Map 'critical' urgency to PriorityEnum.HIGH, 'medium' to PriorityEnum.NORMAL
             if "priority" in data and isinstance(data["priority"], str):
                 p = data["priority"].lower().strip()
                 if p == "critical":
                     data["priority"] = PriorityEnum.HIGH
+                elif p == "medium":
+                    data["priority"] = PriorityEnum.NORMAL
                 else:
                     data["priority"] = p
             if "category" in data and isinstance(data["category"], str):
