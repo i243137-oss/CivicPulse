@@ -65,4 +65,8 @@ Thumbs.db
 *.tmp
 *.temp
 .cache/
+*.pdf
+*.docx
 
+# ─── Local Presentation & Demo Scripts ────────
+docs/DEMO-SCRIPT.md

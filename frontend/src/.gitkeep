@@ -1,7 +1,0 @@
-// frontend/src/
-//
-// Responsibility:
-//   Root source directory for the React TypeScript application.
-//   Contains components, pages, hooks, services, context providers,
-//   and utility modules. The application entry point (main.tsx)
-//   lives here.

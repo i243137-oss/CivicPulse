@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: civicpulse-config
+  namespace: civicpulse
+  labels:
+    app.kubernetes.io/name: civicpulse
+data:
+  APP_NAME: "CivicPulse API"
+  APP_ENV: "production"
+  DEBUG: "false"
+  BACKEND_PORT: "8000"
+  FRONTEND_PORT: "80"
+  POSTGRES_HOST: "postgres"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: "civicpulse"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  TRIAGE_PROVIDER: "rules"
+  LLM_BASE_URL: "https://api.groq.com/openai/v1"
+  LLM_MODEL: "llama-3.1-8b-instant"
+  OLLAMA_BASE_URL: "http://ollama:11434"
+  OLLAMA_MODEL: "llama3.2:1b"

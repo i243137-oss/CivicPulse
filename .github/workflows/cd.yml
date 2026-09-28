@@ -1,0 +1,258 @@
+name: CD
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  test:
+    name: Full Test Suite Verification (Merged Result)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: civicpulse_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Backend Test Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e "backend/[dev]"
+
+      - name: Run Backend Pytest Suite
+        env:
+          TRIAGE_PROVIDER: simulated
+          ENVIRONMENT: testing
+          POSTGRES_DB: civicpulse_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres_test_password
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+        run: |
+          pytest backend/tests --cov=backend/app --cov-report=term-missing --cov-report=xml --cov-fail-under=65
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        working-directory: ./frontend
+        run: |
+          npm ci
+
+      - name: Run Frontend Vitest Suite
+        working-directory: ./frontend
+        run: |
+          npm run test
+
+  build-push:
+    name: Build & Push Images to GHCR with SBOM
+    runs-on: ubuntu-latest
+    needs: [test]
+    outputs:
+      backend_digest: ${{ steps.build-backend.outputs.digest }}
+      frontend_digest: ${{ steps.build-frontend.outputs.digest }}
+      image_tag: ${{ steps.vars.outputs.sha_short }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set Image Tag and Lowercase Repo Variables
+        id: vars
+        run: |
+          REPO_OWNER="${{ github.repository_owner }}"
+          REPO_OWNER_LOWER=$(echo "$REPO_OWNER" | tr '[:upper:]' '[:lower:]')
+          echo "owner_lower=$REPO_OWNER_LOWER" >> $GITHUB_OUTPUT
+          echo "sha_short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+          echo "full_sha=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & Push Backend Image
+        id: build-backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ steps.vars.outputs.owner_lower }}/civicpulse-backend:${{ github.sha }}
+            ghcr.io/${{ steps.vars.outputs.owner_lower }}/civicpulse-backend:latest
+          outputs: type=image,name=ghcr.io/${{ steps.vars.outputs.owner_lower }}/civicpulse-backend,push=true
+
+      - name: Build & Push Frontend Image
+        id: build-frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ steps.vars.outputs.owner_lower }}/civicpulse-frontend:${{ github.sha }}
+            ghcr.io/${{ steps.vars.outputs.owner_lower }}/civicpulse-frontend:latest
+          outputs: type=image,name=ghcr.io/${{ steps.vars.outputs.owner_lower }}/civicpulse-frontend,push=true
+
+      - name: Generate Backend SBOM with Syft
+        uses: anchore/sbom-action@v0
+        with:
+          image: ghcr.io/${{ steps.vars.outputs.owner_lower }}/civicpulse-backend:${{ github.sha }}
+          artifact-name: sbom-backend-${{ github.sha }}.spdx.json
+          format: spdx-json
+          output-file: sbom-backend.spdx.json
+
+      - name: Generate Frontend SBOM with Syft
+        uses: anchore/sbom-action@v0
+        with:
+          image: ghcr.io/${{ steps.vars.outputs.owner_lower }}/civicpulse-frontend:${{ github.sha }}
+          artifact-name: sbom-frontend-${{ github.sha }}.spdx.json
+          format: spdx-json
+          output-file: sbom-frontend.spdx.json
+
+      - name: Upload SBOM Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-spdx-reports
+          path: sbom-*.spdx.json
+          retention-days: 30
+
+  deploy-k8s:
+    name: Ephemeral Kubernetes Deployment, Smoke Tests & Rollback
+    runs-on: ubuntu-latest
+    needs: [build-push]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set Lowercase Repo Owner
+        id: vars
+        run: |
+          REPO_OWNER="${{ github.repository_owner }}"
+          REPO_OWNER_LOWER=$(echo "$REPO_OWNER" | tr '[:upper:]' '[:lower:]')
+          echo "owner_lower=$REPO_OWNER_LOWER" >> $GITHUB_OUTPUT
+
+      - name: Create KinD Cluster
+        uses: helm/kind-action@v1.12.0
+        with:
+          cluster_name: civicpulse-ci
+          config: infra/k8s/kind-config.yaml
+          wait: 120s
+
+      - name: Create Namespace & GHCR ImagePullSecret
+        run: |
+          kubectl create namespace civicpulse || true
+          kubectl create secret docker-registry ghcr-secret \
+            --docker-server=ghcr.io \
+            --docker-username=${{ github.actor }} \
+            --docker-password=${{ secrets.GITHUB_TOKEN }} \
+            -n civicpulse
+
+      - name: Patch Default ServiceAccount with ImagePullSecret
+        run: |
+          kubectl patch serviceaccount default -n civicpulse -p '{"imagePullSecrets": [{"name": "ghcr-secret"}]}'
+
+      - name: Update Production Overlay Image Tags to Commit SHA
+        run: |
+          echo "Updating production image tags to immutable commit SHA: ${{ github.sha }}"
+          sed -i 's|image: .*civicpulse-backend:.*|image: ghcr.io/${{ steps.vars.outputs.owner_lower }}/civicpulse-backend:${{ github.sha }}|g' infra/k8s/base/backend-deployment.yaml
+          sed -i 's|image: .*civicpulse-frontend:.*|image: ghcr.io/${{ steps.vars.outputs.owner_lower }}/civicpulse-frontend:${{ github.sha }}|g' infra/k8s/base/frontend-deployment.yaml
+
+      - name: Apply Production Kubernetes Manifests
+        run: |
+          kubectl apply -k overlays/prod
+
+      - name: Wait for StatefulSet & Deployment Rollout Status
+        run: |
+          echo "Waiting for PostgreSQL StatefulSet rollout..."
+          kubectl rollout status statefulset/postgres -n civicpulse --timeout=180s
+
+          echo "Waiting for Redis Deployment rollout..."
+          kubectl rollout status deployment/redis -n civicpulse --timeout=120s
+
+          echo "Waiting for Backend Deployment rollout..."
+          kubectl rollout status deployment/backend -n civicpulse --timeout=180s
+
+          echo "Waiting for Frontend Deployment rollout..."
+          kubectl rollout status deployment/frontend -n civicpulse --timeout=180s
+
+      - name: Verify Ingress and HorizontalPodAutoscaler
+        run: |
+          echo "Listing all deployed Kubernetes workloads in civicpulse:"
+          kubectl get all,pvc,pdb,hpa,ingress,networkpolicy -n civicpulse
+          echo "--- Print HPA Status ---"
+          kubectl get hpa -n civicpulse
+
+      - name: Execute Post-Deployment Smoke Tests
+        run: |
+          echo "Starting port-forward to test cluster backend..."
+          kubectl port-forward -n civicpulse svc/backend 8000:8000 &
+          PF_PID=$!
+          sleep 5
+
+          echo "== 1. Test Backend /health Probe =="
+          curl -sf http://localhost:8000/health
+          echo ""
+
+          echo "== 2. Test Backend /ready Probe =="
+          curl -sf http://localhost:8000/ready
+          echo ""
+
+          echo "== 3. Test Backend /api/stats =="
+          curl -sf http://localhost:8000/api/stats
+          echo ""
+
+          kill $PF_PID || true
+
+      - name: Demonstrate & Verify Zero-Downtime Rollback
+        run: |
+          echo "== Demonstrating Rollback Mechanism: kubectl rollout undo =="
+          kubectl rollout undo deployment/backend -n civicpulse
+          kubectl rollout status deployment/backend -n civicpulse --timeout=120s
+          echo "Rollback successfully completed and verified!"

@@ -1,0 +1,27 @@
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: backend-vpa
+  namespace: civicpulse
+  labels:
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/part-of: civicpulse
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend
+  updatePolicy:
+    updateMode: "Off"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: backend
+        minAllowed:
+          cpu: 100m
+          memory: 64Mi
+        maxAllowed:
+          cpu: 2000m
+          memory: 1Gi
+        controlledResources:
+          - cpu
+          - memory
