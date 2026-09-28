@@ -543,6 +543,37 @@ strategy:
 
 ---
 
+## Phase 11 — Security Hardening and Vulnerability Review
+
+Implemented comprehensive defense-in-depth security hardening across container runtimes, Kubernetes workloads, network isolation, and application boundaries:
+
+### 1. Non-Root Execution & Linux Capabilities Dropping
+- **Backend**: Container runs as non-root user `app` (`UID 1000, GID 1000`) with no shell or home directory access. Configured with `capabilities: drop: ["ALL"]` and `allowPrivilegeEscalation: false`.
+- **Frontend**: Nginx container runs as non-root user `nginx` (`UID 101, GID 101`). Drops all capabilities with minimal `NET_BIND_SERVICE` permission.
+- **Seccomp Profile**: Configured `seccompProfile: {type: RuntimeDefault}` across all workload specifications.
+
+### 2. Read-Only Root Filesystems
+- Application containers (`backend` and `frontend`) enforce `readOnlyRootFilesystem: true`.
+- Ephemeral scratch directories are strictly mounted via temporary in-memory volumes (`emptyDir: {}`) at `/tmp`, `/var/cache/nginx`, and `/var/run`.
+- Python bytecode creation is disabled (`ENV PYTHONDONTWRITEBYTECODE=1`), ensuring the interpreter functions without attempting to write to read-only directories.
+
+### 3. Kubernetes Least-Privilege & Network Microsegmentation
+- **ServiceAccount Token Protection**: Pods declare `automountServiceAccountToken: false` to eliminate API credential extraction risk in the event of an application compromise.
+- **NetworkPolicies (`infra/k8s/networkpolicy.yaml`)**:
+  - `default-deny-all`: Blocks ingress by default.
+  - `frontend-allow-ingress`: Permits ingress on port 80; isolates frontend completely from direct DB/cache access.
+  - `backend-allow-ingress-and-frontend`: Permits ingress from Nginx reverse proxy and external API router.
+  - `postgres-allow-backend-only`: Limits port 5432 ingress exclusively to pods with `app: backend`.
+  - `redis-allow-backend-only`: Limits port 6379 ingress exclusively to pods with `app: backend`.
+
+### 4. Secret Hygiene & CORS Hardening
+- Audit confirms **0 committed secrets or credentials** across Git history. `.env` is ignored by `.gitignore:35`.
+- `backend/app/core/config.py` enforces deliberate CORS validation: raises a `ValueError` if wildcard `"*"` origins are combined with credentials, and forbids wildcards in production environments.
+- Rate limiting and XML prompt-injection boundary guardrails remain actively enforced.
+- Complete audit report published in [`docs/evidence/SECURITY-HARDENING-AUDIT.md`](./evidence/SECURITY-HARDENING-AUDIT.md).
+
+---
+
 ## Lessons Learned
 
 1. **Structured Output Enforcement in Production**: Free-tier LLMs occasionally wrap JSON in explanatory text or markdown code fences (`json ... `). Robust regex extraction combined with Pydantic model validation prevents runtime crashes and ensures enum compliance.
@@ -550,5 +581,7 @@ strategy:
 3. **Data Residency and Minimization**: By stripping `reporter_contact` prior to invoking external inference, municipal compliance is preserved without compromising classification accuracy.
 4. **StatefulSet vs Deployment for Databases**: Using a Deployment for a database causes split-brain risks and mount conflicts upon rescheduling because Deployments assume stateless, interchangeable pods. StatefulSet guarantees ordered deployment, stable network identities, and dedicated persistent volumes per ordinal replica.
 5. **HPA and VPA Control Loop Decoupling**: Combining HPA (horizontal scaling) and VPA (vertical scaling) on the same resource metric (CPU) creates antagonistic control loops. Keeping VPA in `updateMode: "Off"` allows non-intrusive baseline recommendation gathering while empowering HPA to dynamically manage traffic spikes.
+6. **Container Read-Only Filesystem Isolation**: Enforcing `readOnlyRootFilesystem: true` blocks attackers from downloading or writing executable payloads in the container. However, runtimes require careful emptyDir provisioning for transient sockets and caches (`/tmp`, `/var/run`, `/var/cache/nginx`) and disabling bytecode writes (`PYTHONDONTWRITEBYTECODE=1`).
+
 
 

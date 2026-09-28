@@ -8,7 +8,7 @@ Database, Redis, and AI provider settings are added in later phases
 
 from functools import lru_cache
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -43,6 +43,24 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
         return value
+
+    @model_validator(mode="after")
+    def validate_cors_security(self) -> "Settings":
+        """
+        Enforce CORS deliberate configuration (Phase 11):
+        Disallow wildcard '*' together with credentials, and ensure production
+        rejects wildcard CORS.
+        """
+        if "*" in self.CORS_ORIGINS and self.CORS_ALLOW_CREDENTIALS:
+            raise ValueError(
+                "Security violation: wildcard CORS_ORIGINS=['*'] cannot be combined with CORS_ALLOW_CREDENTIALS=True."
+            )
+        if self.ENVIRONMENT == "production" and "*" in self.CORS_ORIGINS:
+            raise ValueError(
+                "Security violation: wildcard CORS_ORIGINS=['*'] is prohibited in production environment."
+            )
+        return self
+
 
     # --- API ----------------------------------------------------------------
     API_V1_PREFIX: str = "/api"
