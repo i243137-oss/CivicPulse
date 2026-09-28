@@ -41,7 +41,7 @@ spec:
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
-              containerPort: 80
+              containerPort: 8080
           resources:
             requests:
               cpu: 100m
@@ -72,20 +72,20 @@ spec:
           startupProbe:
             httpGet:
               path: /health
-              port: 80
+              port: 8080
             failureThreshold: 15
             periodSeconds: 2
           livenessProbe:
             httpGet:
               path: /health
-              port: 80
+              port: 8080
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /health
-              port: 80
+              port: 8080
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 3
