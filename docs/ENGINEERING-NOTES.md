@@ -354,6 +354,72 @@ Member B implements comprehensive frontend linting, type safety, and component v
 
 ---
 
+## Phase 8 — Observability and Resilience
+
+### Architecture & Capabilities
+
+Phase 8 elevates CivicPulse to cloud-native production standards with end-to-end observability, distributed tracing correlation, probe separation, graceful connection drainage, and Prometheus instrumentation:
+
+1. **JSON Structured Logging (`backend/app/core/logging.py`)**:
+   - Implemented `StructuredJsonFormatter` emitting compact single-line JSON logs for high-throughput stream processing (Logstash, FluentBit, Datadog).
+   - Core standard fields guaranteed on every log record:
+     - `timestamp`: ISO 8601 UTC format (`YYYY-MM-DDTHH:MM:SS.sssZ`).
+     - `level`: Log severity (`INFO`, `WARNING`, `ERROR`, `DEBUG`).
+     - `service`: Application identifier (`civicpulse`).
+     - `logger`: Originating logger hierarchy (e.g., `app.core.logging`, `app.services.triage_service`).
+     - `message`: Formatted human-readable message.
+     - `request_id`: Tracing correlation identifier (injected automatically when present in request context).
+   - Custom extra attributes supplied via `extra={...}` are preserved as top-level JSON fields.
+
+2. **Request ID Correlation & Context Propagation**:
+   - `RequestIdMiddleware` intercepts every incoming HTTP request:
+     - Reads client-supplied `X-Request-ID` header or generates a cryptographically random correlation ID formatted as `req-<hex>`.
+     - Sets the ID into Python `contextvars.ContextVar` (`request_id_ctx`), making the correlation ID coroutine-safe across asynchronous task boundaries.
+     - Logs request initiation (`method`, `path`, `client_ip`) and completion (`status_code`, `duration_ms`).
+     - Returns the correlation ID on the outgoing HTTP response via `X-Request-ID` header.
+
+3. **Separation of Liveness (`/health`) and Readiness (`/ready`)**:
+   - **Liveness Probe (`/health`)**:
+     - Pure zero-dependency probe.
+     - Validates that the Python runtime and ASGI event loop are responsive.
+     - Never touches PostgreSQL or Redis, preventing cascade restart loops during transient database maintenance.
+   - **Readiness Probe (`/ready`)**:
+     - Deep dependency probe validating essential infrastructure components.
+     - Executes `SELECT 1` on PostgreSQL and `PING` on Redis.
+     - Returns HTTP 200 `{"status": "ready", "database": "connected", "redis": "connected"}` when all dependencies are healthy.
+     - Returns HTTP 503 `Service Unavailable` with explicit failure details when any dependency is unreachable, signaling orchestrators (Kubernetes / Docker Compose) to divert ingress traffic.
+
+4. **Graceful Shutdown & SIGTERM Drainage**:
+   - Handled via FastAPI's unified `lifespan` context manager in `backend/app/main.py`.
+   - On `SIGTERM` or `SIGINT`, ASGI server ceases accepting new ingress connections and allows in-flight requests to complete.
+   - During shutdown phase, the lifespan sequentially:
+     1. Disposes the SQLAlchemy asynchronous database connection pool (`await engine.dispose()`).
+     2. Closes and disconnects the Redis asynchronous client pool (`await close_redis_client()`).
+   - Ensures zero socket leaks, connection resets, or unclosed file descriptors during rolling updates.
+
+5. **Prometheus Metrics Endpoint (`/metrics`) (`backend/app/core/metrics.py`, `backend/app/routes/metrics.py`)**:
+   - Exposes standard Prometheus text exposition format (`text/plain; version=0.0.4`) at `GET /metrics`.
+   - Rate limit exempt to ensure monitoring scrapers (Prometheus/Grafana Agent) are never throttled.
+   - Core metrics instrumented:
+     - `civicpulse_http_requests_total`: Counter tracking inbound requests partitioned by `method`, `endpoint`, and `status`.
+     - `civicpulse_http_request_duration_seconds`: Histogram measuring HTTP request latencies across standard latency buckets.
+     - `civicpulse_ai_triage_requests_total`: Counter tracking automated triage execution by `provider` and `status` (`success`, `cached`, `fallback`, `error`).
+     - `civicpulse_ai_triage_duration_seconds`: Histogram tracking triage inference and rule evaluation latency.
+     - `civicpulse_ai_fallback_total`: Dedicated counter tracking heuristic rule-based fallbacks triggered by primary AI provider failures.
+     - `civicpulse_cache_requests_total`: Counter recording Redis cache `hit` vs `miss` events across stats and triage hash caches.
+
+6. **Demonstrable Quality Gate Verification (`backend/tests/test_observability.py`)**:
+   - 11 dedicated test cases verifying:
+     - Structured JSON output format and standard keys.
+     - Request ID context propagation and HTTP header reflection.
+     - Liveness probe zero-dependency isolation.
+     - Readiness probe connectivity verification and 503 failure handling for DB and Redis.
+     - Prometheus metrics scraping and traffic counter emission.
+     - Lifespan graceful cleanup of database and Redis pools.
+   - Full test suite: **95 passed, 1 skipped**, with **88% total statement coverage** across `backend/app/`.
+
+---
+
 ## Lessons Learned
 
 1. **Structured Output Enforcement in Production**: Free-tier LLMs occasionally wrap JSON in explanatory text or markdown code fences (`json ... `). Robust regex extraction combined with Pydantic model validation prevents runtime crashes and ensures enum compliance.
