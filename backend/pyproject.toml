@@ -41,9 +41,10 @@ markers = [
     "asyncio: mark test as an asyncio coroutine",
 ]
 filterwarnings = [
-    "ignore::starlette.testclient.StarletteDeprecationWarning",
+    "ignore::DeprecationWarning",
     "ignore::ResourceWarning",
 ]
+
 
 [tool.coverage.run]
 source = ["app"]

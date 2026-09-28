@@ -27,6 +27,14 @@ spec:
         app.kubernetes.io/part-of: civicpulse
     spec:
       terminationGracePeriodSeconds: 30
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
         - name: wait-for-postgres
           image: postgres:16-alpine
@@ -45,6 +53,13 @@ spec:
                 secretKeyRef:
                   name: civicpulse-secrets
                   key: POSTGRES_USER
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
       containers:
         - name: backend
           image: ghcr.io/i243137-oss/civicpulse-backend:1.0.0
@@ -90,10 +105,17 @@ spec:
           securityContext:
             runAsNonRoot: true
             runAsUser: 1000
+            runAsGroup: 1000
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop:
                 - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           lifecycle:
             preStop:
               exec:
@@ -101,6 +123,7 @@ spec:
                   - sh
                   - -c
                   - sleep 5
+
           startupProbe:
             httpGet:
               path: /health
@@ -121,3 +144,7 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
+      volumes:
+        - name: tmp
+          emptyDir: {}
+

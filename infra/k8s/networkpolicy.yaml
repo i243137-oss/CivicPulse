@@ -1,0 +1,103 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: civicpulse
+  labels:
+    app.kubernetes.io/name: default-deny-all
+    app.kubernetes.io/part-of: civicpulse
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend-allow-ingress
+  namespace: civicpulse
+  labels:
+    app.kubernetes.io/name: frontend
+    app.kubernetes.io/part-of: civicpulse
+spec:
+  podSelector:
+    matchLabels:
+      app: frontend
+  ingress:
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 80
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-allow-ingress-and-frontend
+  namespace: civicpulse
+  labels:
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/part-of: civicpulse
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: frontend
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 8000
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-allow-backend-only
+  namespace: civicpulse
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/part-of: civicpulse
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: backend
+      ports:
+        - protocol: TCP
+          port: 5432
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-allow-backend-only
+  namespace: civicpulse
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/part-of: civicpulse
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: backend
+      ports:
+        - protocol: TCP
+          port: 6379
+  policyTypes:
+    - Ingress

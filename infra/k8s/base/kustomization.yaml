@@ -16,3 +16,4 @@ resources:
   - hpa.yaml
   - pdb.yaml
   - vpa.yaml
+  - networkpolicy.yaml
