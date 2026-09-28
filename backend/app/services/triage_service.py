@@ -119,6 +119,12 @@ class TriageService:
         if settings.TRIAGE_CACHE_ENABLED and redis is not None:
             cached_result = await self.get_cached_result(redis, content_hash)
             if cached_result is not None:
+                try:
+                    from app.core.metrics import CACHE_REQUESTS_TOTAL
+                    CACHE_REQUESTS_TOTAL.labels(cache_type="triage_content_hash", result="hit").inc()
+                except Exception:
+                    pass
+
                 outcome = TriageExecutionOutcome(
                     result=cached_result,
                     triaged_by=f"cache:{self.primary_provider.name}",
@@ -128,6 +134,12 @@ class TriageService:
                 )
                 self._record_telemetry(outcome, location)
                 return outcome
+
+        try:
+            from app.core.metrics import CACHE_REQUESTS_TOTAL
+            CACHE_REQUESTS_TOTAL.labels(cache_type="triage_content_hash", result="miss").inc()
+        except Exception:
+            pass
 
         # 2. Primary provider execution
         start_time = time.perf_counter()
@@ -139,6 +151,13 @@ class TriageService:
             logger.info("Executing triage with primary provider: %s", self.primary_provider.name)
             result = await self.primary_provider.triage(text=text, location=location)
             latency_ms = max(1, int((time.perf_counter() - start_time) * 1000))
+
+            try:
+                from app.core.metrics import AI_TRIAGE_DURATION_SECONDS, AI_TRIAGE_REQUESTS_TOTAL
+                AI_TRIAGE_REQUESTS_TOTAL.labels(provider=self.primary_provider.name, status="success").inc()
+                AI_TRIAGE_DURATION_SECONDS.labels(provider=self.primary_provider.name).observe(latency_ms / 1000.0)
+            except Exception:
+                pass
 
             # Cache successful primary inference
             if settings.TRIAGE_CACHE_ENABLED and redis is not None:
@@ -154,6 +173,17 @@ class TriageService:
             latency_ms = max(1, int((time.perf_counter() - start_time) * 1000))
             fallback_used = True
             triaged_by = "rules:fallback"
+
+            try:
+                from app.core.metrics import AI_FALLBACK_TOTAL, AI_TRIAGE_REQUESTS_TOTAL
+                AI_TRIAGE_REQUESTS_TOTAL.labels(provider=self.primary_provider.name, status="failure").inc()
+                AI_FALLBACK_TOTAL.labels(
+                    from_provider=self.primary_provider.name,
+                    to_provider=self.fallback_provider.name,
+                ).inc()
+            except Exception:
+                pass
+
             logger.warning(
                 "Primary triage provider '%s' failed (%s) after %dms. Falling back to %s.",
                 self.primary_provider.name,

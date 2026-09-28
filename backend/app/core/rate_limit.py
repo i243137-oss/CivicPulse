@@ -184,6 +184,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     EXEMPT_PATHS = {
         "/health",
         "/ready",
+        "/metrics",
         "/docs",
         "/redoc",
         "/openapi.json",

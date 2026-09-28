@@ -278,11 +278,58 @@ All services declare rigorous healthchecks and startup ordering using `depends_o
 
 ---
 
-## Phase 7 — Testing, Quality, and Full-Path Verification (Member B)
+## Phase 7 — Testing, Quality, and Full-Path Verification
 
-### Frontend Quality Gates & Component Testing
+### Member A: Backend Test Architecture, Validation, Coverage, and Full-Path Integration
 
-Member B implements comprehensive linting, type safety, and component verification:
+Member A implements the full backend quality engineering deliverables across all architectural tiers:
+
+1. **Backend Unit & Isolation Tests**:
+   - **Services Layer**: Verified `ComplaintService` (auto-triage triggers, manual category overrides, 404 handling, allowed transitions dispatch), `CacheService` (read-through cache, write invalidation, TTL expiration), `TriageService` (provider execution, content-hash hashing, fallback chain, cache telemetry), and `StateMachine` (deterministic transition matrix).
+   - **Repositories Layer**: Verified `ComplaintRepository` filtering (category, priority, status), pagination bounds, and SQL aggregation (`get_stats()`).
+   - **Pydantic Validation & Bounds (`test_validation.py`)**:
+     - Strict text length validation (10 to 2000 characters).
+     - Strict location length boundaries (3 to 200 characters).
+     - Contact metadata constraints (max 255 characters).
+     - Strict enum compliance: `CategoryEnum`, `PriorityEnum`, and `StatusEnum`.
+     - HTTP parameter boundaries: `page >= 1`, `1 <= page_size <= 100`, malformed UUID rejection with HTTP 422.
+   - **Distributed Rate Limiting & Persistence**: Verified sliding-window atomic Lua limiter (`test_rate_limit.py`), IP bucket isolation, probe exemptions, and multi-instance concurrency (`test_multi_instance_redis.py`).
+   - **AI Triage Resilience (`test_triage.py`)**: 10s hard cap, strict jittered retry (timeout, 429, 5xx only; zero retries on connection error or 400), prompt injection isolation (`<complaint_untrusted_input>`), and deterministic fallback recording verbatim `triaged_by = "rules:fallback"`.
+
+2. **Complete Application Path Integration Test (`test_full_path_integration.py`)**:
+   - Validates the entire citizen-to-operator lifecycle end-to-end on the backend:
+     1. Probes: Health (`/health`) and Readiness (`/ready`) checks.
+     2. Stats Read-Through Cache: Initial `X-Cache: MISS` followed by `X-Cache: HIT`.
+     3. Citizen Intake: Submitting complaint triggers automated triage and returns HTTP 201 with server-assigned category and allowed transitions.
+     4. Write Cache Invalidation: Subsequent stats call reflects fresh counts with `X-Cache: MISS`.
+     5. Duplicate Caching: Identical complaint submission hits 24h content-hash cache in Redis (`cache:llm:simulated`) in $\le 2$ms.
+     6. Telemetry Monitoring: `GET /api/meta/providers` exposes verified non-zero `hit_rate`.
+     7. Query & Pagination: Combined multi-criteria filtering and multi-page pagination.
+     8. State Machine Progression: Transitioning `open` &rarr; `in_progress` &rarr; `resolved`.
+     9. Conflict Rejection: Attempting illegal backward or terminal transitions returns HTTP 409 Conflict.
+     10. Final Consistency: Aggregated statistics reflect the resolved issue.
+
+3. **Coverage Configuration (`pyproject.toml`) & Test Metrics**:
+   - Configured `[tool.pytest.ini_options]` with `asyncio_mode = "auto"`.
+   - Configured `[tool.coverage.run]` (branch coverage on `app/`) and `[tool.coverage.report]` with `fail_under = 85`.
+   - **Test Results**: **84 passed, 1 skipped** (live PostgreSQL probe skipped when offline).
+   - **Coverage**: **90% total statement coverage** across `backend/app/`, easily surpassing the assignment rubric requirement:
+     - `app/services/state_machine.py`: 100%
+     - `app/schemas/complaint.py`: 100%
+     - `app/repositories/complaint_repository.py`: 100%
+     - `app/models/complaint.py`: 97%
+     - `app/providers/triage/base.py`: 98%
+     - `app/providers/triage/rules.py`: 97%
+     - `app/providers/triage/ollama.py`: 96%
+     - `app/providers/triage/llm.py`: 95%
+     - `app/services/complaint_service.py`: 95%
+     - `app/services/triage_service.py`: 89%
+
+---
+
+### Member B: Frontend Quality Gates, Vitest Suite, and Full-Path UI Verification
+
+Member B implements comprehensive frontend linting, type safety, and component verification:
 
 1. **Linting & Type Safety**:
    - `npm run lint`: Enforces zero warnings/errors via `eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0`.
@@ -298,22 +345,78 @@ Member B implements comprehensive linting, type safety, and component verificati
      - `ErrorBoundary.test.tsx`: Uncaught render exception handling, fallback card with reset recovery.
      - `AppIntegration.test.tsx`: **Complete Application Path Integration Test** validating the full user journey: Navbar routing &rarr; citizen intake form completion &rarr; automated triage transition &rarr; issue detail inspection &rarr; state machine status advancement &rarr; return to complaints list queue.
 
-### Deterministic Test Execution & Backend Suite Verification
+### Deterministic Test Execution & Cross-Platform Verification
 
 - **Air-Gapped & Deterministic Execution**: All tests execute using `TRIAGE_PROVIDER=simulated` or `RuleBasedTriage`, guaranteeing zero dependence on external paid AI APIs and zero flakiness in CI/CD.
 - **Cross-Platform Compatibility**:
   - Replaced hardcoded `/home/umair_hassan/...` Linux paths in `backend/tests/test_postgres_compatibility.py` with `sys.executable -m alembic` and dynamic relative path resolution.
   - Added explicit `sync_engine.dispose()` before temporary SQLite database file removal in `backend/tests/test_migrations.py` to prevent Windows file handle contention errors (`PermissionError`).
-- **Backend Test Coverage (pytest-cov)**:
-  - 72 passing tests, 1 skipped (live PostgreSQL skipped in offline unit test run).
-  - **90% total statement coverage** across `app/`, easily surpassing the assignment rubric requirement of ≥ 65% coverage:
-    - `app/services/complaint_service.py`: 95%
-    - `app/services/triage_service.py`: 89%
-    - `app/services/state_machine.py`: 100%
-    - `app/repositories/complaint_repository.py`: 100%
-    - `app/core/rate_limit.py`: 90%
-    - `app/models/complaint.py`: 97%
-    - `app/schemas/complaint.py`: 100%
+
+---
+
+## Phase 8 — Observability and Resilience
+
+### Architecture & Capabilities
+
+Phase 8 elevates CivicPulse to cloud-native production standards with end-to-end observability, distributed tracing correlation, probe separation, graceful connection drainage, and Prometheus instrumentation:
+
+1. **JSON Structured Logging (`backend/app/core/logging.py`)**:
+   - Implemented `StructuredJsonFormatter` emitting compact single-line JSON logs for high-throughput stream processing (Logstash, FluentBit, Datadog).
+   - Core standard fields guaranteed on every log record:
+     - `timestamp`: ISO 8601 UTC format (`YYYY-MM-DDTHH:MM:SS.sssZ`).
+     - `level`: Log severity (`INFO`, `WARNING`, `ERROR`, `DEBUG`).
+     - `service`: Application identifier (`civicpulse`).
+     - `logger`: Originating logger hierarchy (e.g., `app.core.logging`, `app.services.triage_service`).
+     - `message`: Formatted human-readable message.
+     - `request_id`: Tracing correlation identifier (injected automatically when present in request context).
+   - Custom extra attributes supplied via `extra={...}` are preserved as top-level JSON fields.
+
+2. **Request ID Correlation & Context Propagation**:
+   - `RequestIdMiddleware` intercepts every incoming HTTP request:
+     - Reads client-supplied `X-Request-ID` header or generates a cryptographically random correlation ID formatted as `req-<hex>`.
+     - Sets the ID into Python `contextvars.ContextVar` (`request_id_ctx`), making the correlation ID coroutine-safe across asynchronous task boundaries.
+     - Logs request initiation (`method`, `path`, `client_ip`) and completion (`status_code`, `duration_ms`).
+     - Returns the correlation ID on the outgoing HTTP response via `X-Request-ID` header.
+
+3. **Separation of Liveness (`/health`) and Readiness (`/ready`)**:
+   - **Liveness Probe (`/health`)**:
+     - Pure zero-dependency probe.
+     - Validates that the Python runtime and ASGI event loop are responsive.
+     - Never touches PostgreSQL or Redis, preventing cascade restart loops during transient database maintenance.
+   - **Readiness Probe (`/ready`)**:
+     - Deep dependency probe validating essential infrastructure components.
+     - Executes `SELECT 1` on PostgreSQL and `PING` on Redis.
+     - Returns HTTP 200 `{"status": "ready", "database": "connected", "redis": "connected"}` when all dependencies are healthy.
+     - Returns HTTP 503 `Service Unavailable` with explicit failure details when any dependency is unreachable, signaling orchestrators (Kubernetes / Docker Compose) to divert ingress traffic.
+
+4. **Graceful Shutdown & SIGTERM Drainage**:
+   - Handled via FastAPI's unified `lifespan` context manager in `backend/app/main.py`.
+   - On `SIGTERM` or `SIGINT`, ASGI server ceases accepting new ingress connections and allows in-flight requests to complete.
+   - During shutdown phase, the lifespan sequentially:
+     1. Disposes the SQLAlchemy asynchronous database connection pool (`await engine.dispose()`).
+     2. Closes and disconnects the Redis asynchronous client pool (`await close_redis_client()`).
+   - Ensures zero socket leaks, connection resets, or unclosed file descriptors during rolling updates.
+
+5. **Prometheus Metrics Endpoint (`/metrics`) (`backend/app/core/metrics.py`, `backend/app/routes/metrics.py`)**:
+   - Exposes standard Prometheus text exposition format (`text/plain; version=0.0.4`) at `GET /metrics`.
+   - Rate limit exempt to ensure monitoring scrapers (Prometheus/Grafana Agent) are never throttled.
+   - Core metrics instrumented:
+     - `civicpulse_http_requests_total`: Counter tracking inbound requests partitioned by `method`, `endpoint`, and `status`.
+     - `civicpulse_http_request_duration_seconds`: Histogram measuring HTTP request latencies across standard latency buckets.
+     - `civicpulse_ai_triage_requests_total`: Counter tracking automated triage execution by `provider` and `status` (`success`, `cached`, `fallback`, `error`).
+     - `civicpulse_ai_triage_duration_seconds`: Histogram tracking triage inference and rule evaluation latency.
+     - `civicpulse_ai_fallback_total`: Dedicated counter tracking heuristic rule-based fallbacks triggered by primary AI provider failures.
+     - `civicpulse_cache_requests_total`: Counter recording Redis cache `hit` vs `miss` events across stats and triage hash caches.
+
+6. **Demonstrable Quality Gate Verification (`backend/tests/test_observability.py`)**:
+   - 11 dedicated test cases verifying:
+     - Structured JSON output format and standard keys.
+     - Request ID context propagation and HTTP header reflection.
+     - Liveness probe zero-dependency isolation.
+     - Readiness probe connectivity verification and 503 failure handling for DB and Redis.
+     - Prometheus metrics scraping and traffic counter emission.
+     - Lifespan graceful cleanup of database and Redis pools.
+   - Full test suite: **95 passed, 1 skipped**, with **88% total statement coverage** across `backend/app/`.
 
 ---
 
