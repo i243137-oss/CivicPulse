@@ -167,20 +167,20 @@ Create a robust, gated Continuous Integration workflow (`.github/workflows/ci.ym
 Create an automated Continuous Delivery workflow (`.github/workflows/cd.yml`) triggered on push to `main` or release tag. Build, sign, and publish immutable container images to GitHub Packages (GHCR), generate an SBOM, deploy to a test environment, execute smoke tests, and document rollback.
 
 **Scope (Member B)**:
-- [ ] Create `.github/workflows/cd.yml` triggered on push to `main` and version tags (`v*.*.*`).
-- [ ] Build multi-platform production container images using `docker/build-push-action`.
-- [ ] Tag images with immutable Git commit SHA (`${{ github.sha }}`) and semantic version; strictly avoid deploying `:latest`.
-- [ ] Publish images to GitHub Container Registry (GHCR: `ghcr.io/<org>/civicpulse-*`).
-- [ ] Generate Software Bill of Materials (SBOM) using Syft or Trivy (`anchore/sbom-action`).
-- [ ] Deploy manifests to an ephemeral Kubernetes cluster (KinD or Minikube).
-- [ ] Run automated post-deployment smoke tests (`curl` health and stats endpoints).
-- [ ] Document and demonstrate the rollback procedure (`kubectl rollout undo deployment/...`).
+- [x] Create `.github/workflows/cd.yml` triggered on push to `main` and version tags (`v*.*.*`).
+- [x] Build multi-platform production container images using `docker/build-push-action`.
+- [x] Tag images with immutable Git commit SHA (`${{ github.sha }}`) and semantic version; strictly avoid deploying `:latest`.
+- [x] Publish images to GitHub Container Registry (GHCR: `ghcr.io/<org>/civicpulse-*`).
+- [x] Generate Software Bill of Materials (SBOM) using Syft or Trivy (`anchore/sbom-action`).
+- [x] Deploy manifests to an ephemeral Kubernetes cluster (KinD or Minikube).
+- [x] Run automated post-deployment smoke tests (`curl` health and stats endpoints).
+- [x] Document and demonstrate the rollback procedure (`kubectl rollout undo deployment/...`).
 
 #### Exit Gate
-- Images successfully published to GHCR with commit SHA tags.
-- SBOM published as workflow artifact.
-- Automated smoke tests verify deployment liveness and readiness.
-- Rollback command proven functional in evidence logs.
+- [x] Images successfully published to GHCR with commit SHA tags.
+- [x] SBOM published as workflow artifact.
+- [x] Automated smoke tests verify deployment liveness and readiness.
+- [x] Rollback command proven functional in evidence logs.
 
 ---
 

@@ -606,6 +606,34 @@ The workflow enforces a directed acyclic graph (DAG) across 8 distinct jobs:
 
 ---
 
+## Phase 13 — Continuous Delivery Pipeline & Ephemeral Deployments (Member B)
+
+Member B architected and implemented the automated Continuous Delivery pipeline (`.github/workflows/cd.yml`) and Release workflow (`.github/workflows/release.yml`):
+
+### 1. Delivery Architecture & Triggers
+- **Triggers**: Executed on push to `main` (deployable release branch), version tags (`v*.*.*`), or manual `workflow_dispatch`.
+- **Least-Privilege RBAC**: `permissions: contents: read, packages: write` scoped specifically to publishing images to GitHub Container Registry (GHCR).
+- **Gating by Needs**: `build-push` is strictly gated on `needs: [test]`, and `deploy-k8s` is strictly gated on `needs: [build-push]`. No artifacts are compiled or deployed from failing code.
+
+### 2. Immutable Image Publishing & SBOM Generation
+- **Registry Targets**: `ghcr.io/i243137-oss/civicpulse-backend` and `ghcr.io/i243137-oss/civicpulse-frontend`.
+- **Immutable References**: Every deployed container is tagged with the exact Git commit SHA (`${{ github.sha }}`) and tracked by image digest. The `:latest` tag is published solely for discovery and is **strictly prohibited from deployment**.
+- **Software Bill of Materials (SBOM)**: Integrated Syft via `anchore/sbom-action@v0` to generate machine-readable SPDX-JSON catalogs for every layer of backend and frontend images, published as workflow artifacts (`sbom-*.spdx.json`).
+
+### 3. Ephemeral Kubernetes Deployment & Smoke Verification
+- Provisions an ephemeral KinD cluster with host port mappings (`80`, `443`) via `infra/k8s/kind-config.yaml`.
+- Configures `ghcr-secret` image pull credentials and patches `default` ServiceAccount in namespace `civicpulse`.
+- Applies declarative Kustomize production manifests (`overlays/prod`) updating image tags to the immutable commit SHA.
+- Waits for rollout completion across `statefulset/postgres`, `deployment/redis`, `deployment/backend`, and `deployment/frontend`.
+- Executes automated smoke tests verifying `/health`, `/ready`, `/api/stats`, and `kubectl get hpa`.
+
+### 4. Rollback Mechanisms
+Demonstrates two industry-standard rollback mechanisms:
+1. **Imperative Rollback (`kubectl rollout undo deployment/backend -n civicpulse`)**: The fast, 3:00 AM emergency answer that instantly reverts the ReplicaSet to the previous stable revision.
+2. **Declarative Rollback (Git Revert / Kustomize SHA Update)**: The auditable, permanent answer that records the rollback in Git history, prevents configuration drift, and ensures reproducibility.
+
+---
+
 ## Lessons Learned
 
 1. **Structured Output Enforcement in Production**: Free-tier LLMs occasionally wrap JSON in explanatory text or markdown code fences (`json ... `). Robust regex extraction combined with Pydantic model validation prevents runtime crashes and ensures enum compliance.
@@ -615,6 +643,8 @@ The workflow enforces a directed acyclic graph (DAG) across 8 distinct jobs:
 5. **HPA and VPA Control Loop Decoupling**: Combining HPA (horizontal scaling) and VPA (vertical scaling) on the same resource metric (CPU) creates antagonistic control loops. Keeping VPA in `updateMode: "Off"` allows non-intrusive baseline recommendation gathering while empowering HPA to dynamically manage traffic spikes.
 6. **Container Read-Only Filesystem Isolation**: Enforcing `readOnlyRootFilesystem: true` blocks attackers from downloading or writing executable payloads in the container. However, runtimes require careful emptyDir provisioning for transient sockets and caches (`/tmp`, `/var/run`, `/var/cache/nginx`) and disabling bytecode writes (`PYTHONDONTWRITEBYTECODE=1`).
 7. **Strict CI Dependency Gating (`needs`)**: Running builds and integration tests on code that fails basic linting or unit tests wastes expensive compute minutes and obscures root causes. Designing a tiered dependency DAG ensures failures fail fast at the earliest static analysis rung, protecting downstream runners.
+8. **Dual-Mechanism Rollback Strategy**: During a live production outage, imperative rollback (`kubectl rollout undo`) restores service in seconds. However, declarative rollback (reverting the commit in Git and updating the Kustomize SHA tag) is essential post-incident to preserve single-source-of-truth GitOps compliance and prevent subsequent CI/CD runs from redeploying faulty code.
+
 
 
 

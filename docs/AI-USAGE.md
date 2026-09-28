@@ -22,6 +22,13 @@ Each entry follows this template:
 
 ## Log
 
+### 2026-09-28 — Phase 13: Continuous Delivery Pipeline, GHCR Publishing, SBOM, and Ephemeral Deployments (Member B)
+
+- **Tool:** Google Antigravity (Gemini)
+- **Prompt summary:** Implement Phase 13 Continuous Delivery workflow (`.github/workflows/cd.yml`) and Release workflow (`.github/workflows/release.yml`) per assignment specification. Trigger on push to `main` and version tags (`v*`). Enforce job dependencies with `needs: [test]` on build-push and `needs: [build-push]` on deploy-k8s. Configure least-privilege `permissions: contents: read, packages: write`. Build multi-stage images via Docker Buildx and push to GHCR tagged with immutable Git commit SHA (`${{ github.sha }}`). Generate machine-readable SPDX-JSON Software Bill of Materials (SBOM) using Syft (`anchore/sbom-action@v0`). Spin up ephemeral KinD cluster with host port mappings (`infra/k8s/kind-config.yaml`), configure image pull credentials, update Kustomize manifests to commit SHA, and wait for rollout completion across all stateful and stateless workloads. Execute automated post-deployment smoke tests (`/health`, `/ready`, `/api/stats`) and demonstrate imperative rollback (`kubectl rollout undo`). Create release workflow for semver tags. Update submission check script and produce audit report in `docs/evidence/CD-DELIVERY-EVIDENCE.md`.
+- **Output used:** `.github/workflows/cd.yml`, `.github/workflows/release.yml`, `infra/k8s/kind-config.yaml`, `scripts/check_submission.py`, `docs/evidence/CD-DELIVERY-EVIDENCE.md`, `docs/ENGINEERING-NOTES.md`, and `docs/AI-USAGE.md`.
+- **Human review:** Verified workflow syntax, permissions block, needs dependency tree, KinD cluster configuration, immutable SHA image tagging, and SBOM artifact generation. Verified `scripts/check_submission.py` passes all 7 mechanical checks.
+
 ### 2026-09-28 — Phase 12: Continuous Integration Pipeline, Kubeconform, Trivy & Compose Integration Smoke Test (Member B)
 
 - **Tool:** Google Antigravity (Gemini)
