@@ -226,23 +226,28 @@ jobs:
           docker load -i /tmp/frontend-image.tar
           docker image ls
 
-      - name: Run Trivy Vulnerability Scan on Backend Image
-        uses: aquasecurity/trivy-action@v0.28.0
-        with:
-          image-ref: civicpulse-backend:ci
-          format: table
-          exit-code: 1
-          ignore-unfixed: true
-          severity: CRITICAL,HIGH
+      - name: Install Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+          trivy --version
 
-      - name: Run Trivy Vulnerability Scan on Frontend Image
-        uses: aquasecurity/trivy-action@v0.28.0
-        with:
-          image-ref: civicpulse-frontend:ci
-          format: table
-          exit-code: 1
-          ignore-unfixed: true
-          severity: CRITICAL,HIGH
+      - name: Run Trivy Scan on Backend Image
+        run: |
+          trivy image \
+            --format table \
+            --exit-code 1 \
+            --ignore-unfixed \
+            --severity CRITICAL,HIGH \
+            civicpulse-backend:ci
+
+      - name: Run Trivy Scan on Frontend Image
+        run: |
+          trivy image \
+            --format table \
+            --exit-code 1 \
+            --ignore-unfixed \
+            --severity CRITICAL,HIGH \
+            civicpulse-frontend:ci
 
   integration:
     name: Compose Integration Smoke Test
