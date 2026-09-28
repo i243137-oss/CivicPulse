@@ -245,18 +245,19 @@ Provide comprehensive, production-grade documentation enabling an external engin
 Systematically map every rubric criterion from Assignment 01 to exact code implementations, test runs, CI logs, and operational evidence, ensuring 100% auditability.
 
 **Scope (Both)**:
-- [ ] Create `docs/EVIDENCE-MAPPING.md` mapping every single rubric item to its file, line number, or command output.
-- [ ] Archive evidence under `docs/evidence/`:
+- [x] Create `docs/EVIDENCE-MAPPING.md` mapping every single rubric item to its file, line number, or command output.
+- [x] Archive evidence under `docs/evidence/`:
   - Network segmentation proof (`frontend` cannot ping `postgres`).
   - Redis cache `HIT`/`MISS` headers and sliding-window rate limit 429 response.
   - Deterministic AI triage fallback when LLM fails.
   - HPA scaling under load (`kubectl get hpa -w`).
   - Zero-downtime rolling update with PodDisruptionBudget.
   - Green GitHub Actions CI/CD run links and SBOM output.
-- [ ] Draft a crisp, timed 5-minute final video demonstration script.
+- [x] Draft a crisp, timed 5-minute final video demonstration script (`docs/DEMO-SCRIPT.md` preserved locally in presenter workspace).
 
 #### Exit Gate
-- Every single rubric requirement is backed by concrete logs, test runs, or screenshots with zero secrets exposed.
+- [x] Every single rubric requirement is backed by concrete logs, test runs, or screenshots with zero secrets exposed.
+
 
 ---
 

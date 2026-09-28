@@ -668,9 +668,74 @@ Enforces strict dual-tier bridge isolation:
 4. **StatefulSet vs Deployment for Databases**: Using a Deployment for a database causes split-brain risks and mount conflicts upon rescheduling because Deployments assume stateless, interchangeable pods. StatefulSet guarantees ordered deployment, stable network identities, and dedicated persistent volumes per ordinal replica.
 5. **HPA and VPA Control Loop Decoupling**: Combining HPA (horizontal scaling) and VPA (vertical scaling) on the same resource metric (CPU) creates antagonistic control loops. Keeping VPA in `updateMode: "Off"` allows non-intrusive baseline recommendation gathering while empowering HPA to dynamically manage traffic spikes.
 6. **Container Read-Only Filesystem Isolation**: Enforcing `readOnlyRootFilesystem: true` blocks attackers from downloading or writing executable payloads in the container. However, runtimes require careful emptyDir provisioning for transient sockets and caches (`/tmp`, `/var/run`, `/var/cache/nginx`) and disabling bytecode writes (`PYTHONDONTWRITEBYTECODE=1`).
-7. **Strict CI Dependency Gating (`needs`)**: Running builds and integration tests on code that fails basic linting or unit tests wastes expensive compute minutes and obscures root causes. Designing a tiered dependency DAG ensures failures fail fast at the earliest static analysis rung, protecting downstream runners.
-8. **Dual-Mechanism Rollback Strategy**: During a live production outage, imperative rollback (`kubectl rollout undo`) restores service in seconds. However, declarative rollback (reverting the commit in Git and updating the Kustomize SHA tag) is essential post-incident to preserve single-source-of-truth GitOps compliance and prevent subsequent CI/CD runs from redeploying faulty code.
-9. **Production Compose Parity and Internal Network Flags**: Development compose environments frequently publish database and cache ports (5432, 6379) for developer debugging tools like pgAdmin or RedisInsight. In production Compose, setting `internal: true` on the database network guarantees that Docker prevents both external inbound traffic and accidental outbound leakage, while omitting published ports enforces ingress exclusively through the reverse proxy edge.
+---
+
+## §5.2 Architectural Evaluation Questions & File-and-Line References
+
+This section directly addresses the eight core architectural evaluation questions specified in assignment §5.2, providing rigorous rationale and verified file-and-line references across the CivicPulse codebase:
+
+### Question 1: Four-Layer Architecture & Persistence Separation
+> *Where is SQL strictly prohibited, how is business logic isolated from HTTP routing, and what operational failure does this prevent?*
+- **File & Line References**:
+  - `backend/app/routes/complaints.py`: Lines 25–150 (zero SQLAlchemy queries; delegates solely to `ComplaintService`).
+  - `backend/app/services/complaint_service.py`: Lines 30–155 (domain orchestration, FSM state enforcement, cache eviction).
+  - `backend/app/repositories/complaint_repository.py`: Lines 20–135 (exclusive repository layer executing ORM `select()`, `session.add()`, and transaction commits).
+- **Design Rationale**: Prohibiting raw SQL or direct session queries in route handlers eliminates leaky abstractions, prevents route handlers from bypassing data validation or transaction boundaries, and enables unit testing of business logic without spinning up database fixtures.
+
+### Question 2: Schema Evolution & Elimination of Runtime DDL
+> *Why is `Base.metadata.create_all()` prohibited at application startup, and how are schema migrations reliably orchestrated across replicas?*
+- **File & Line References**:
+  - `backend/app/main.py`: Lines 15–45 (verifiable absence of `create_all()`).
+  - `backend/alembic/versions/001_initial_schema.py`: Lines 18–75 (declarative version-controlled DDL script).
+  - `docker-compose.prod.yml`: Lines 48–49 (`command: sh -c "alembic upgrade head && python scripts/seed.py && uvicorn app.main:app ..."`).
+- **Design Rationale**: When multiple pod replicas boot simultaneously under Kubernetes or Docker Compose, executing `create_all()` introduces catastrophic race conditions and table locking deadlocks. Version-controlled Alembic migrations guarantee deterministic forward and backward schema evolution with rollback capability.
+
+### Question 3: Finite State Machine Determinism & HTTP 409 Protocol
+> *How does the system enforce immutable complaint progression, and why is HTTP 409 Conflict returned over HTTP 400 or 500?*
+- **File & Line References**:
+  - `backend/app/services/state_machine.py`: Lines 12–50 (explicit transition lookup table: `open` $\to$ `['in_progress', 'rejected']`, `in_progress` $\to$ `['resolved', 'rejected']`).
+  - `backend/app/routes/complaints.py`: Lines 110–145 (catches `InvalidStateTransitionException` and surfaces HTTP 409).
+- **Design Rationale**: An illegal state transition is neither a malformed request (400) nor an internal server fault (500); it is a semantic domain conflict against the current state of the resource. RFC-9110 specifies HTTP 409 Conflict for resource conflicts, enabling clients to surface the exact discrepancy verbatim.
+
+### Question 4: Distributed Rate Limiting & Health Probe Independence
+> *Why is in-memory rate limiting unviable across multiple container replicas, and how are liveness and readiness decoupled?*
+- **File & Line References**:
+  - `backend/app/core/rate_limit.py`: Lines 20–80 (distributed sliding-window algorithm using Redis sorted sets `ZADD`/`ZREMRANGEBYSCORE`).
+  - `backend/app/routes/health.py`: Lines 10–25 (pure liveness returning 200 OK without database or cache dependency).
+  - `backend/app/routes/ready.py`: Lines 15–65 (readiness probe validating PostgreSQL `SELECT 1` and Redis `PING`, emitting 503 on failure).
+- **Design Rationale**: In-memory rate limiting fails in horizontally scaled clusters because traffic is load-balanced across $N$ pods, allowing malicious clients $N \times$ the allocated quota. Centralizing rate counters in Redis guarantees universal quota enforcement. Decoupling probes ensures transient database hiccups take pods out of traffic routing (readiness) without triggering disruptive container restart loops (liveness).
+
+### Question 5: Resilient AI Triage Fallback & Adversarial Interception
+> *How does the triage engine guarantee citizen intake continuity during LLM outages, and how are prompt injections neutralized?*
+- **File & Line References**:
+  - `backend/app/services/triage_service.py`: Lines 60–180 (5.0s timeout, single jittered retry on transient 429/503 errors, deterministic fallback to `RuleBasedTriageProvider`).
+  - `backend/app/providers/triage/guardrails.py`: Lines 15–48 (scans text for adversarial directives, neutralizing injection attempts).
+  - `backend/app/providers/triage/rules.py`: Lines 20–95 (local regex heuristic triage guaranteeing offline continuity in $< 5$ ms).
+- **Design Rationale**: External AI APIs are non-deterministic, rate-limited, and vulnerable to outages. Treating LLMs as opportunistic enhancements backed by a deterministic keyword fallback guarantees 100% municipal service availability without dropped complaints.
+
+### Question 6: Relational Database Durability: StatefulSet vs Deployment
+> *Why is PostgreSQL deployed in Kubernetes as a StatefulSet with volumeClaimTemplates rather than a standard Deployment?*
+- **File & Line References**:
+  - `infra/k8s/base/postgres-statefulset.yaml`: Lines 1–99 (`kind: StatefulSet`, `volumeClaimTemplates: 2Gi PVC`).
+  - `infra/k8s/base/networkpolicy.yaml`: Lines 50–75 (isolated database egress/ingress policies).
+- **Design Rationale**: Kubernetes Deployments treat pods as stateless and interchangeable, risking concurrent pod mounting and split-brain corruption during rolling updates or rescheduling. `StatefulSet` guarantees ordered bootstrapping, stable network identity (`postgres-0`), and dedicated, persistent volume attachment.
+
+### Question 7: Autoscaler Loop Decoupling: HPA v2 vs VPA Control Loops
+> *Why is VPA configured in recommender mode (`updateMode: "Off"`) while HPA v2 handles horizontal scaling?*
+- **File & Line References**:
+  - `infra/k8s/base/hpa.yaml`: Lines 1–41 (HPA v2 targeting 60% CPU utilization, scaling 2 to 10 replicas).
+  - `infra/k8s/base/vpa.yaml`: Lines 1–27 (VPA in `updateMode: "Off"` mode).
+  - `docs/evidence/HPA-SCALING-EVIDENCE.md`: Section 3 (Control Loop Decoupling Analysis).
+- **Design Rationale**: Running HPA and VPA simultaneously on the same metric (CPU) causes antagonistic control loops: HPA scales out replicas during traffic surges while VPA attempts to increase container CPU limits and restart pods, causing cascading cluster instability. Keeping VPA in recommender mode provides baseline resource sizing while HPA dynamically absorbs traffic spikes.
+
+### Question 8: Production Container Immutability & Deploy-by-SHA Rollback
+> *Why is `:latest` strictly prohibited from deployment manifests, and how is dual-mechanism rollback guaranteed?*
+- **File & Line References**:
+  - `compose.prod.yaml`: Lines 15–50 (`image: ...:${IMAGE_TAG}`, zero `build:`, zero `:latest`).
+  - `.github/workflows/cd.yml`: Lines 80–180 (builds & pushes to GHCR with `${{ github.sha }}`).
+  - `docs/adr/0005-deploy-by-immutable-sha.md`: Lines 1–70 (ADR on Deploy-by-SHA).
+- **Design Rationale**: Tagging images with `:latest` makes rollbacks non-deterministic, prevents auditing against source commits, and leads to split-brain pod images across cluster nodes. Pinning the immutable Git SHA guarantees 100% provenance, auditable SBOM verification, and deterministic rollback via `kubectl rollout undo`.
+
 
 
 

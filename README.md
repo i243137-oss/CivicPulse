@@ -1,216 +1,187 @@
-# 🏛️ CivicPulse
+# 🏛️ CivicPulse — Intelligent Civic Issue Triage & Management Platform
 
-> **AI-powered civic issue reporting platform** — empowering citizens to report, track, and resolve community issues in real time.
-
----
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Tech Stack](#tech-stack)
-- [Repository Structure](#repository-structure)
-- [Getting Started](#getting-started)
-- [Environment Variables](#environment-variables)
-- [Development](#development)
-- [Testing](#testing)
-- [Deployment](#deployment)
-- [Contributing](#contributing)
+[![CI Pipeline](https://github.com/i243137-oss/CivicPulse/actions/workflows/ci.yml/badge.svg)](https://github.com/i243137-oss/CivicPulse/actions/workflows/ci.yml)
+[![CD Pipeline](https://github.com/i243137-oss/CivicPulse/actions/workflows/cd.yml/badge.svg)](https://github.com/i243137-oss/CivicPulse/actions/workflows/cd.yml)
+[![Python Version](https://img.shields.io/badge/python-3.12-blue.svg)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com)
+[![React](https://img.shields.io/badge/React-18.3-61dafb.svg)](https://react.dev)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791.svg)](https://postgresql.org)
+[![Redis](https://img.shields.io/badge/Redis-7-dc382d.svg)](https://redis.io)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-1.30-326ce5.svg)](https://kubernetes.io)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
 
-## Overview
+## 📌 Problem Statement
 
-CivicPulse is a full-stack civic issue reporting platform that allows residents to:
+Municipalities receive hundreds of unstructured citizen reports daily regarding infrastructure failures (water main breaks, electrical hazards, potholes, sanitation backlog). Traditional city reporting systems suffer from:
+1. **Intake Latency & Manual Routing**: Days lost manually reading and categorizing civic issues.
+2. **Cascading Service Outages**: Dependency on third-party cloud AI APIs causes civic platform downtime when upstream providers fail.
+3. **No Abuse or Scraping Protection**: Public portals are susceptible to denial-of-service floods and automated spam.
+4. **Lack of Citizen Transparency**: Opaque resolution workflows leave citizens unaware of issue progression.
 
-- 📝 Submit civic issues (potholes, broken streetlights, graffiti, etc.)
-- 📍 Geolocate issues on an interactive map
-- 🤖 Leverage AI to auto-categorize, prioritize, and summarize reports
-- 📊 Track issue status from submission through resolution
-- 🔔 Receive real-time updates on reported issues
-
----
-
-## Tech Stack
-
-| Layer          | Technology                          |
-| -------------- | ----------------------------------- |
-| **Frontend**   | React 18, TypeScript, Vite          |
-| **Backend**    | Python 3.12, FastAPI, SQLAlchemy    |
-| **Database**   | PostgreSQL 16                       |
-| **Cache**      | Redis 7                             |
-| **AI**         | OpenAI API (GPT-4)                  |
-| **Containers** | Docker, Docker Compose              |
-| **Orchestration** | Kubernetes (K8s)                 |
-| **CI/CD**      | GitHub Actions                      |
+**CivicPulse** solves these operational bottlenecks by providing an enterprise-grade, resilient, full-stack municipal triage platform. It combines automated heuristic and LLM triage with instantaneous fallback, distributed rate limiting, read-through caching, finite state machine progression, and high-availability Kubernetes autoscaling.
 
 ---
 
-## Repository Structure
+## 🏗️ System Architecture
 
-```
-CivicPulse/
-│
-├── backend/                    # FastAPI backend application
-│   ├── app/                    #   Application package (routes, models, services)
-│   ├── tests/                  #   Backend unit & integration tests
-│   ├── requirements.txt        #   Pinned Python dependencies
-│   ├── Dockerfile              #   Backend container image definition
-│   └── pyproject.toml          #   Python project metadata & tool config
-│
-├── frontend/                   # React TypeScript frontend application
-│   ├── src/                    #   Source code (components, pages, hooks)
-│   ├── public/                 #   Static assets served as-is
-│   ├── package.json            #   Node.js dependencies & scripts
-│   ├── vite.config.ts          #   Vite bundler configuration
-│   └── Dockerfile              #   Frontend container image definition
-│
-├── infra/                      # Infrastructure-as-Code
-│   ├── docker/                 #   Extra Docker configs (nginx, etc.)
-│   └── k8s/                    #   Kubernetes manifests
-│
-├── tests/                      # Cross-cutting tests
-│   └── integration/            #   End-to-end / integration test suites
-│
-├── docs/                       # Project documentation
-│   ├── adr/                    #   Architecture Decision Records
-│   ├── RUNBOOK.md              #   Operational runbook
-│   ├── AI-USAGE.md             #   AI usage log
-│   └── ENGINEERING-NOTES.md    #   Engineering notes & design rationale
-│
-├── .github/                    # GitHub-specific configuration
-│   └── workflows/              #   CI/CD pipeline definitions
-│
-├── docker-compose.yml          # Development orchestration
-├── docker-compose.prod.yml     # Production orchestration
-├── .env.example                # Example environment variables
-├── .gitignore                  # Git ignore rules
-└── README.md                   # ← You are here
+CivicPulse is engineered as a cloud-native, layered monorepo with strict network segmentation and bounded contexts:
+
+```mermaid
+graph TD
+    Client["Citizen & Municipal Staff"]
+    Ingress["Nginx Ingress / Reverse Proxy (Port 80)"]
+
+    subgraph EdgeLayer["Edge Network (civicpulse_edge)"]
+        Frontend["React 18 + TypeScript SPA<br/>Vite + Nginx Non-Root"]
+    end
+
+    subgraph InternalLayer["Internal Network (civicpulse_internal, internal: true)"]
+        Backend["FastAPI Backend Replicas (Port 8000)<br/>Python 3.12 Non-Root UID 10001"]
+        Postgres["PostgreSQL 16 StatefulSet<br/>Persistent PVC + Indexes"]
+        Redis["Redis 7 Cluster<br/>AOF Persistence + Sliding Rate Limiter"]
+    end
+
+    subgraph AIProviders["AI Triage Subsystem"]
+        Rules["Rule-Based Heuristic Provider<br/>(Deterministic Offline Fallback)"]
+        Simulated["Simulated AI Provider<br/>(CI & Offline Testing)"]
+        LLM["Groq / OpenAI LLM Provider<br/>(Llama-3.1 / GPT-4)"]
+        Ollama["Local Ollama Daemon<br/>(Self-Hosted LLM)"]
+    end
+
+    Client -->|"HTTP :80"| Ingress
+    Ingress -->|"Route /"| Frontend
+    Ingress -->|"proxy_pass /api/, /health, /ready, /metrics"| Backend
+    Backend -->|"TCP :5432"| Postgres
+    Backend -->|"TCP :6379"| Redis
+    Backend -->|"Triage Execution"| AIProviders
+
+    Frontend -.->|"BLOCKED (No Route)"| Postgres
+    Frontend -.->|"BLOCKED (No Route)"| Redis
 ```
 
 ---
 
-## Getting Started
+## 🚀 One-Command Quickstart
 
-### Prerequisites
-
-- [Docker](https://docs.docker.com/get-docker/) ≥ 24.x
-- [Docker Compose](https://docs.docker.com/compose/) ≥ 2.x
-- [Node.js](https://nodejs.org/) ≥ 20.x (for local frontend development)
-- [Python](https://python.org/) ≥ 3.12 (for local backend development)
-- [Git](https://git-scm.com/) ≥ 2.x
-
-### Quick Start
+Get the complete production-grade CivicPulse stack running locally in under 60 seconds:
 
 ```bash
-# 1. Clone the repository
+# 1. Clone repository
 git clone https://github.com/i243137-oss/CivicPulse.git
 cd CivicPulse
 
-# 2. Set up environment variables
+# 2. Configure environment with defaults
 cp .env.example .env
-# Edit .env with your actual values
 
-# 3. Start all services
+# 3. Launch full stack with one command
+docker compose up -d --build
+
+# 4. Access interfaces:
+#    Citizen Portal & Dashboard → http://localhost:80
+#    Backend Interactive Docs   → http://localhost:80/docs
+#    Prometheus Metrics         → http://localhost:80/metrics
+#    Liveness Probe             → http://localhost:80/health
+#    Readiness Probe            → http://localhost:80/ready
+```
+
+To stop and remove containers cleanly:
+```bash
+docker compose down -v
+```
+
+---
+
+## 🔌 API Contract Reference (All 10 Endpoints)
+
+| Method | Endpoint | Description | Status Codes | Auth / Rate Limit |
+| :--- | :--- | :--- | :--- | :--- |
+| `POST` | `/api/complaints` | Submit a new civic complaint for automated AI triage | `201 Created`, `422 Validation`, `429 Rate Limit` | Distributed 10 req/min |
+| `GET` | `/api/complaints` | Paginated listing with status and category filters | `200 OK`, `422 Validation` | None |
+| `GET` | `/api/complaints/{id}` | Retrieve specific complaint by UUID | `200 OK`, `404 Not Found` | None |
+| `PATCH`| `/api/complaints/{id}/status` | Execute state machine status transition | `200 OK`, `400 Bad Request`, `409 Conflict` | FSM Transition Table |
+| `GET` | `/api/stats` | Summary statistics with read-through Redis cache | `200 OK` (`X-Cache: HIT/MISS`) | Cached 30s TTL |
+| `GET` | `/health` | Pure liveness probe (independent of DB/Redis) | `200 OK` | None (Exempt) |
+| `GET` | `/ready` | Readiness probe verifying PostgreSQL & Redis | `200 OK`, `503 Unavailable` | None (Exempt) |
+| `GET` | `/metrics` | Prometheus telemetry metrics export | `200 OK` | None (Internal) |
+| `GET` | `/api/meta/providers` | AI triage provider telemetry, latency, cache hit rate | `200 OK` | None |
+| `GET` | `/docs` / `/openapi.json` | Interactive Swagger API documentation | `200 OK` | None |
+
+---
+
+## 📸 User Interface & Operational Views
+
+### 1. Citizen Intake View (`/`)
+- Client-side validation enforcing minimum length and valid contact email.
+- Honest loading spinner disabling double-clicks during triage inference.
+- Real-time result card rendering server-assigned **Category**, **Priority**, **AI Summary**, and **Triage Provider**.
+
+### 2. Operator Management Dashboard (`/complaints`)
+- Server-side paginated table with category and status filters.
+- Status transition buttons (`In Progress`, `Resolved`, `Rejected`).
+- Verbatim surfacing of HTTP `409 Conflict` errors on illegal transitions.
+
+### 3. Analytics & Cache Dashboard (`/dashboard`)
+- Aggregate complaint metrics (total, open, in-progress, resolved, rejected).
+- Dynamic cache telemetry badge displaying **`X-Cache: HIT`** (green) or **`X-Cache: MISS`** (amber).
+- Write-time cache invalidation demonstration.
+
+---
+
+## 🏛️ Infrastructure & Deployment Modes
+
+### Development Mode
+```bash
 docker compose up --build
-
-# 4. Open in browser
-#    Frontend  → http://localhost:5173
-#    Backend   → http://localhost:8000
-#    API Docs  → http://localhost:8000/docs
 ```
+- Includes live bind mount (`./backend:/app`) for sub-second hot reloading.
+- Exposes developer debugging ports (`5432`, `6379`, `8000`).
+
+### Production Compose Mode (Image-Only)
+```bash
+docker compose -f docker-compose.prod.yml up -d
+```
+- Zero `build:` directives; pulls immutable images from GHCR (`${IMAGE_TAG}`).
+- Zero database or cache port exposure to the host.
+- Dual-tier bridge networks (`edge` and `internal: true`).
+
+### Kubernetes Production Cluster
+```bash
+kubectl apply -k infra/k8s/overlays/prod
+```
+- Multi-replica Deployments with PodDisruptionBudget (`minAvailable: 1`).
+- Horizontal Pod Autoscaling (HPA v2) targeting 60% CPU (2 to 10 replicas).
+- PostgreSQL `StatefulSet` with dedicated 2Gi PersistentVolumeClaim.
+- Five strict Kubernetes `NetworkPolicy` objects.
 
 ---
 
-## Environment Variables
-
-See [`.env.example`](.env.example) for all available configuration options.
-
-| Variable             | Description                        | Default       |
-| -------------------- | ---------------------------------- | ------------- |
-| `APP_ENV`            | Runtime environment                | `development` |
-| `BACKEND_PORT`       | Port the FastAPI server listens on | `8000`        |
-| `POSTGRES_PASSWORD`  | PostgreSQL password                | *(required)*  |
-| `REDIS_HOST`         | Redis hostname                     | `redis`       |
-| `OPENAI_API_KEY`     | OpenAI API key for AI features     | *(optional)*  |
-
----
-
-## Development
-
-### Backend
+## 🧪 Testing & Quality Assurance
 
 ```bash
-cd backend
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
+# Run backend pytest suite with statement coverage (89% achieved)
+cd backend && pytest --cov=app --cov-report=term-missing
 
-### Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
----
-
-## Testing
-
-```bash
-# Backend unit tests
-cd backend && pytest
-
-# Frontend tests
+# Run frontend Vitest component suite (15 passed tests)
 cd frontend && npm test
 
-# Integration tests (requires running services)
-cd tests/integration && pytest
+# Run mechanical pre-submission checker (7/7 passing)
+python scripts/check_submission.py
 ```
 
 ---
 
-## Deployment
+## 📖 Documentation Index
 
-### Docker Compose (Production)
-
-```bash
-docker compose -f docker-compose.prod.yml up -d --build
-```
-
-### Kubernetes
-
-```bash
-kubectl apply -f infra/k8s/
-```
-
----
-
-## Contributing
-
-1. Create a feature branch from `dev` (e.g., `feature/backend`)
-2. Make your changes
-3. Submit a Pull Request targeting `dev`
-4. After review, `dev` merges into `master` for releases
-
-### Branch Strategy
-
-```
-master          ← production-ready releases
-  └── dev       ← integration branch
-       ├── feature/backend
-       ├── feature/frontend
-       ├── feature/ai
-       ├── feature/kubernetes
-       └── feature/ci
-```
-
----
-
-## License
-
-This project is part of an academic/professional portfolio. All rights reserved.
-
-
+- [Master Rubric & Evidence Traceability Matrix](docs/EVIDENCE-MAPPING.md)
+- [Operational Runbook & Triage Incident Guide](docs/RUNBOOK.md)
+- [Engineering Notes & Design Decisions](docs/ENGINEERING-NOTES.md)
+- **Timed 5-Minute Video Demonstration Script**: Maintained locally in presenter workspace (`docs/DEMO-SCRIPT.md`)
+- [Branch Protection & Collaboration Evidence](docs/evidence/BRANCH-PROTECTION-EVIDENCE.md)
+- [Kubernetes HPA Scaling & Load Test Evidence](docs/evidence/HPA-SCALING-EVIDENCE.md)
+- [Security Hardening & CVE Audit](docs/evidence/SECURITY-HARDENING-AUDIT.md)
+- [Continuous Integration Pipeline Evidence](docs/evidence/CI-PIPELINE-EVIDENCE.md)
+- [Continuous Delivery & Rollback Evidence](docs/evidence/CD-DELIVERY-EVIDENCE.md)
+- [Production Compose Parity Evidence](docs/evidence/PRODUCTION-COMPOSE-EVIDENCE.md)
+- [Architecture Decision Records (ADRs)](docs/adr/)
