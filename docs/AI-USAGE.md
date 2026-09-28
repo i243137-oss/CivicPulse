@@ -80,7 +80,15 @@ Each entry follows this template:
 - **Output used:** `frontend/src/tests/AppIntegration.test.tsx`, `backend/tests/test_postgres_compatibility.py`, `backend/tests/test_migrations.py`, `docs/ENGINEERING-NOTES.md`, and `docs/AI-USAGE.md`.
 - **Human review:** Verified all 6 Vitest suites (15 tests) pass, verified backend pytest suite passes with 90% statement coverage on `app/` (exceeding 65% threshold), confirmed 0 ESLint warnings, and verified production build bundling.
 
+### 2026-09-28 — Phase 16: Master Rubric & Evidence Traceability Matrix (Both)
+
+- **Tool:** Google Antigravity (Gemini)
+- **Prompt summary:** Implement Phase 16 Rubric and Evidence Mapping. Construct master traceability matrix `docs/EVIDENCE-MAPPING.md` exhaustively mapping all 150 marks across Sections A through J to implementation files, line numbers, verification test commands, evidence documents, and demonstration steps. Archive collaboration and branch protection evidence in `docs/evidence/BRANCH-PROTECTION-EVIDENCE.md` verifying `main` protection API status, two-branch model, PR review logs, commit distribution, and deliberate merge conflict resolution. Prepare a timed 5-minute video demonstration script `docs/DEMO-SCRIPT.md` with second-by-second narration, UI walkthroughs, and CLI commands (kept in local presenter workspace). Audit against non-negotiable failure conditions with `scripts/check_submission.py` (7/7 passing).
+- **Output used:** `docs/EVIDENCE-MAPPING.md`, `docs/evidence/BRANCH-PROTECTION-EVIDENCE.md`, `docs/ENGINEERING-NOTES.md`, `docs/ISSUES-ROADMAP.md`, `README.md`, and `docs/AI-USAGE.md`.
+- **Human review:** Verified every single rubric item has traceable, reproducible proof, verified branch protection API active on `main`, confirmed zero secrets in evidence archives, verified commit distribution balance (59.3% Member B, 40.7% Member A), and verified 5-minute demo script timing (4m 50s total duration).
+
 ### 2026-09-28 — Phase 14: Production Docker Compose Parity & Isolation Hardening (Member B)
+
 
 - **Tool:** Google Antigravity (Gemini)
 - **Prompt summary:** Implement Phase 14 Production Compose parity. Convert `docker-compose.prod.yml` and `compose.prod.yaml` into strict image-only deployments. Eliminate all `build:` instructions. Pin container images with immutable `${IMAGE_TAG:-v1.0.0}` pointing to GHCR (`ghcr.io/i243137-oss/*`) and strictly eliminate mutable `:latest` references. Enforce zero host port exposure for PostgreSQL (5432) and Redis (6379), isolating them to the `internal: true` network. Eliminate development bind mounts. Implement Nginx reverse proxy routes for `/health`, `/ready`, `/metrics`, and `/docs`. Create `.env.production.example` for secure production secrets provisioning. Expand mechanical pre-submission checker to validate production compose compliance (7/7 checks passing).
