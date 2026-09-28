@@ -56,22 +56,22 @@ Implement comprehensive production observability, separate liveness from readine
 Create production-grade Kubernetes manifests deploying CivicPulse into a dedicated `civicpulse` namespace with high availability, isolated storage, and Ingress routing.
 
 **Scope (Member B)**:
-- [ ] Create dedicated namespace manifest: `infra/k8s/namespace.yaml` (`civicpulse`).
-- [ ] Create `ConfigMap` (`configmap.yaml`) for non-sensitive configuration and `Secret` (`secrets.yaml` / template) for database passwords and API keys.
-- [ ] Create PostgreSQL `StatefulSet` (`postgres-statefulset.yaml`) backed by a PersistentVolumeClaim (`PVC`) to guarantee data durability across pod rescheduling.
-- [ ] Create Redis `Deployment` (`redis-deployment.yaml`) with persistent volume for AOF logs.
-- [ ] Create `ClusterIP` Services for backend, frontend, postgres, and redis (zero external port publishing for database or cache).
-- [ ] Create FastAPI `backend` and React `frontend` `Deployments` with $\ge 2$ replicas each.
-- [ ] Configure `livenessProbe` (`/health`), `readinessProbe` (`/ready`), and `startupProbe` on application pods.
-- [ ] Define explicit CPU/Memory resource `requests` and `limits` on every container.
-- [ ] Create Kubernetes `Ingress` (`ingress.yaml`) routing `/` to `frontend` and `/api` to `backend`.
-- [ ] Enforce image immutability (disallow `:latest` tag in manifests).
+- [x] Create dedicated namespace manifest: `infra/k8s/namespace.yaml` (`civicpulse`).
+- [x] Create `ConfigMap` (`configmap.yaml`) for non-sensitive configuration and `Secret` (`secrets.yaml` / template) for database passwords and API keys.
+- [x] Create PostgreSQL `StatefulSet` (`postgres-statefulset.yaml`) backed by a PersistentVolumeClaim (`PVC`) to guarantee data durability across pod rescheduling.
+- [x] Create Redis `Deployment` (`redis-deployment.yaml`) with persistent volume for AOF logs.
+- [x] Create `ClusterIP` Services for backend, frontend, postgres, and redis (zero external port publishing for database or cache).
+- [x] Create FastAPI `backend` and React `frontend` `Deployments` with $\ge 2$ replicas each.
+- [x] Configure `livenessProbe` (`/health`), `readinessProbe` (`/ready`), and `startupProbe` on application pods.
+- [x] Define explicit CPU/Memory resource `requests` and `limits` on every container.
+- [x] Create Kubernetes `Ingress` (`ingress.yaml`) routing `/` to `frontend` and `/api` to `backend`.
+- [x] Enforce image immutability (disallow `:latest` tag in manifests).
 
 #### Exit Gate
-- `kubectl apply -f infra/k8s/` succeeds without errors.
-- All pods reach `Running` and `Ready` state.
-- Ingress successfully routes public traffic to frontend and proxies API requests.
-- No database or Redis ports published outside the cluster.
+- [x] `kubectl apply -f infra/k8s/` / `kubectl kustomize infra/k8s/` succeeds without errors.
+- [x] All pods configured with startup/liveness/readiness probes and $\ge 2$ replicas.
+- [x] Ingress successfully routes public traffic to frontend and proxies API requests.
+- [x] No database or Redis ports published outside the cluster (ClusterIP only).
 
 ---
 

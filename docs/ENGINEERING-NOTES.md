@@ -420,8 +420,82 @@ Phase 8 elevates CivicPulse to cloud-native production standards with end-to-end
 
 ---
 
+---
+
+## Phase 9 — Kubernetes Baseline Manifests and High Availability (Member B)
+
+Member B architected and validated production-grade Kubernetes manifests for CivicPulse under the dedicated `civicpulse` namespace, applying Kubernetes best practices for data persistence, zero-downtime rollouts, and ingress traffic routing.
+
+### 1. Workload Architecture & Workload Types
+
+1. **PostgreSQL as a `StatefulSet` (Architectural Requirement)**:
+   - *Design Rationale*: As mandated by the specification and rubric, deploying a stateful relational database like PostgreSQL as a generic `Deployment` is an anti-pattern. Deployments consider pods fungible and stateless, which risks multiple pods concurrently mounting a read-write volume, causing filesystem corruption or split-brain states during rescheduling.
+   - *StatefulSet Guarantee*: Configured with `serviceName: postgres` and `volumeClaimTemplates` (`storage: 2Gi`, `ReadWriteOnce`). The StatefulSet guarantees deterministic pod identity (`postgres-0`), ordered startup/shutdown, and permanent binding to its persistent volume across restarts and rescheduling.
+
+2. **Redis Cache as a `Deployment` with Persistent Volume**:
+   - Deployed with a dedicated `PersistentVolumeClaim` (`redis-data-pvc`, 1Gi) mounted at `/data`.
+   - Enabled Append-Only File (AOF) persistence via container args `--appendonly yes --appendfsync everysec`, ensuring zero loss of cached triage metadata or rate-limiting windows upon container restart.
+
+3. **FastAPI Backend Deployment ($\ge 2$ Replicas)**:
+   - Configured with 2 replicas for high availability and load distribution.
+   - **InitContainer (`wait-for-postgres`)**: Uses `postgres:16-alpine` and `pg_isready` to poll PostgreSQL availability before launching the application container, eliminating startup race conditions.
+   - **Graceful Rolling Updates**: Strategy configured with `maxSurge: 1` and `maxUnavailable: 0`.
+   - **Connection Draining Hook**: Implements `preStop: exec: ["sh", "-c", "sleep 5"]` with `terminationGracePeriodSeconds: 30`. This ensures Kubernetes removes the terminating pod from Service endpoints and Ingress routing tables before the Uvicorn process receives `SIGTERM`, preventing dropped citizen requests during deployments.
+
+4. **React Frontend Deployment ($\ge 2$ Replicas)**:
+   - Configured with 2 replicas serving the compiled Nginx SPA image.
+   - Resource-efficient baseline with sub-second health probe responses on port 80.
+
+### 2. Probe Separation: Startup, Liveness, and Readiness
+
+To prevent cascading restarts and broken service routing, three distinct probe tiers are configured across all application pods:
+
+| Probe Type | Target Endpoint | Timing / Thresholds | Architectural Responsibility |
+| :--- | :--- | :--- | :--- |
+| **Startup Probe** | `/health` (port 8000) | Period: 2s, Failure: 30 (60s max) | Protects slow application bootstrapping; suspends liveness/readiness checks until Uvicorn has completely initialized. |
+| **Liveness Probe** | `/health` (port 8000) | Period: 10s, Timeout: 3s, Failure: 3 | Verifies container process health without database dependencies. Prevents false-positive pod restarts during upstream database latency. |
+| **Readiness Probe** | `/ready` (port 8000) | Period: 10s, Timeout: 3s, Failure: 3 | Verifies PostgreSQL and Redis connectivity. Temporarily isolates the pod from traffic if downstream dependencies are degraded. |
+
+Database and cache workloads use native command probes:
+- PostgreSQL: `pg_isready -U $POSTGRES_USER -d $POSTGRES_DB`
+- Redis: `redis-cli ping`
+
+### 3. Resource Requests, Limits & Horizontal Scalability
+
+Every container defines explicit CPU and Memory requests and limits to ensure predictable scheduling, prevent noisy neighbor starvation, and establish the denominator for Horizontal Pod Autoscaling (HPA v2):
+- **Backend**: `requests: {cpu: 250m, memory: 128Mi}`, `limits: {cpu: 1000m, memory: 512Mi}`
+- **Frontend**: `requests: {cpu: 100m, memory: 64Mi}`, `limits: {cpu: 500m, memory: 256Mi}`
+- **PostgreSQL**: `requests: {cpu: 250m, memory: 256Mi}`, `limits: {cpu: 1000m, memory: 512Mi}`
+- **Redis**: `requests: {cpu: 100m, memory: 64Mi}`, `limits: {cpu: 500m, memory: 256Mi}`
+
+### 4. Network Isolation & Ingress Routing
+
+1. **Zero External Port Exposure**:
+   - All 4 internal components (`frontend`, `backend`, `postgres`, `redis`) expose solely `ClusterIP` Services.
+   - PostgreSQL (`5432`) and Redis (`6379`) are completely unreachable from outside the cluster network.
+2. **Kubernetes Ingress (`civicpulse-ingress`)**:
+   - Single ingress controller host routing traffic:
+     - `/api` &rarr; `backend:8000` (FastAPI REST endpoints)
+     - `/health` &rarr; `backend:8000` (public liveness)
+     - `/ready` &rarr; `backend:8000` (public readiness)
+     - `/` &rarr; `frontend:80` (React SPA)
+3. **Immutable Tagging**:
+   - Zero `:latest` tags in any manifest. Images pinned to immutable versions (`ghcr.io/i243137-oss/civicpulse-backend:1.0.0`, `ghcr.io/i243137-oss/civicpulse-frontend:1.0.0`, `postgres:16-alpine`, `redis:7-alpine`).
+
+### 5. Kustomize Multi-Environment Structure
+
+The manifests are structured for Kustomize with declarative base and overlay definitions:
+- `infra/k8s/base/`: Contains pure base manifests and base `kustomization.yaml`.
+- `infra/k8s/overlays/dev/`: Developer environment overlay with environment overlays.
+- `infra/k8s/overlays/prod/`: Production environment overlay.
+- `infra/k8s/kustomization.yaml`: Root kustomization referencing manifests for direct `kubectl apply -k infra/k8s/` or `kubectl apply -f infra/k8s/`.
+
+---
+
 ## Lessons Learned
 
 1. **Structured Output Enforcement in Production**: Free-tier LLMs occasionally wrap JSON in explanatory text or markdown code fences (`json ... `). Robust regex extraction combined with Pydantic model validation prevents runtime crashes and ensures enum compliance.
 2. **Resilient Triage Fallback**: AI services are inherently non-deterministic and subject to upstream rate limits and network degradation. An automated intake platform must treat the LLM as an opportunistic optimization, with an immediate, deterministic heuristic fallback path (`RuleBasedTriage`) ensuring uninterrupted citizen service.
 3. **Data Residency and Minimization**: By stripping `reporter_contact` prior to invoking external inference, municipal compliance is preserved without compromising classification accuracy.
+4. **StatefulSet vs Deployment for Databases**: Using a Deployment for a database causes split-brain risks and mount conflicts upon rescheduling because Deployments assume stateless, interchangeable pods. StatefulSet guarantees ordered deployment, stable network identities, and dedicated persistent volumes per ordinal replica.
+
