@@ -634,6 +634,32 @@ Demonstrates two industry-standard rollback mechanisms:
 
 ---
 
+## Phase 14 — Production Docker Compose Parity & Isolation Hardening
+
+### 1. Architectural Scope & Image-Only Parity
+Phase 14 delivers an enterprise-grade production Compose stack (`docker-compose.prod.yml` and `compose.prod.yaml`) mirroring production constraints:
+- **Zero `build:` Directives**: Eliminates developer build contexts in production, requiring pre-built, security-scanned images from GHCR (`ghcr.io/i243137-oss/*`).
+- **Immutable Tag Pinning**: Enforces explicit tag specification `${IMAGE_TAG}` with fallback to immutable semantic version (`v1.0.0`), preventing mutable `:latest` tag risks.
+- **Zero Development Bind Mounts**: Application code is fully compiled and baked inside container layers; runtime changes require image deployment.
+
+### 2. Edge vs Internal Network Segmentation
+Enforces strict dual-tier bridge isolation:
+1. **`edge` Network (`civicpulse_edge`)**:
+   - Contains `frontend` (Nginx reverse proxy) and `backend` (FastAPI).
+   - Ingress port `80` is mapped on the host, directing citizen traffic to Nginx.
+   - Nginx routes `/api/*`, `/health`, `/ready`, `/metrics`, and `/docs` to `backend:8000`.
+2. **`internal` Network (`civicpulse_internal`, `internal: true`)**:
+   - Contains `backend`, `postgres`, and `redis`.
+   - `internal: true` instructs the Docker daemon to block external egress and host port exposure.
+   - `postgres` (5432) and `redis` (6379) publish **zero host ports**, rendering them unreachable outside the private container mesh.
+
+### 3. Durability & Startup Ordering
+- **Postgres Durability**: Named volume `pgdata` mounted to `/var/lib/postgresql/data`.
+- **Redis AOF Persistence**: Named volume `redisdata` mounted to `/data` with `--appendonly yes --appendfsync everysec`.
+- **Startup Gating**: `depends_on` with `condition: service_healthy` ensures ordered bootstrapping: DB & Cache $\to$ Backend Migrations/Seed $\to$ Frontend.
+
+---
+
 ## Lessons Learned
 
 1. **Structured Output Enforcement in Production**: Free-tier LLMs occasionally wrap JSON in explanatory text or markdown code fences (`json ... `). Robust regex extraction combined with Pydantic model validation prevents runtime crashes and ensures enum compliance.
@@ -644,6 +670,8 @@ Demonstrates two industry-standard rollback mechanisms:
 6. **Container Read-Only Filesystem Isolation**: Enforcing `readOnlyRootFilesystem: true` blocks attackers from downloading or writing executable payloads in the container. However, runtimes require careful emptyDir provisioning for transient sockets and caches (`/tmp`, `/var/run`, `/var/cache/nginx`) and disabling bytecode writes (`PYTHONDONTWRITEBYTECODE=1`).
 7. **Strict CI Dependency Gating (`needs`)**: Running builds and integration tests on code that fails basic linting or unit tests wastes expensive compute minutes and obscures root causes. Designing a tiered dependency DAG ensures failures fail fast at the earliest static analysis rung, protecting downstream runners.
 8. **Dual-Mechanism Rollback Strategy**: During a live production outage, imperative rollback (`kubectl rollout undo`) restores service in seconds. However, declarative rollback (reverting the commit in Git and updating the Kustomize SHA tag) is essential post-incident to preserve single-source-of-truth GitOps compliance and prevent subsequent CI/CD runs from redeploying faulty code.
+9. **Production Compose Parity and Internal Network Flags**: Development compose environments frequently publish database and cache ports (5432, 6379) for developer debugging tools like pgAdmin or RedisInsight. In production Compose, setting `internal: true` on the database network guarantees that Docker prevents both external inbound traffic and accidental outbound leakage, while omitting published ports enforces ingress exclusively through the reverse proxy edge.
+
 
 
 

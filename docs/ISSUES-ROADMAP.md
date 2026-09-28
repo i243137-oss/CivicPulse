@@ -194,16 +194,17 @@ Create an automated Continuous Delivery workflow (`.github/workflows/cd.yml`) tr
 Deliver a production-ready, image-only Docker Compose configuration (`compose.prod.yaml` / `docker-compose.prod.yml`) that runs baked GHCR container images with zero development bind mounts and zero database/cache port publishing.
 
 **Scope (Member B)**:
-- [ ] Finalize `compose.prod.yaml` and `docker-compose.prod.yml` to rely 100% on immutable images (`image: ...:${IMAGE_TAG}`), eliminating all `build:` directives.
-- [ ] Remove all published host ports for `postgres` and `redis` (accessible solely through the internal bridge network).
-- [ ] Enforce resource constraints (`deploy.resources.limits` and `reservations`) for all 4 services.
-- [ ] Configure `restart: always` on all production services.
-- [ ] Verify Redis AOF persistence and automated DB migration on boot.
-- [ ] Validate configuration using `docker compose -f compose.prod.yaml config`.
+- [x] Finalize `compose.prod.yaml` and `docker-compose.prod.yml` to rely 100% on immutable images (`image: ...:${IMAGE_TAG}`), eliminating all `build:` directives.
+- [x] Remove all published host ports for `postgres` and `redis` (accessible solely through the internal bridge network).
+- [x] Enforce resource constraints (`deploy.resources.limits` and `reservations`) for all 4 services.
+- [x] Configure `restart: always` on all production services.
+- [x] Verify Redis AOF persistence and automated DB migration on boot.
+- [x] Validate configuration using `docker compose -f compose.prod.yaml config`.
 
 #### Exit Gate
-- `docker compose -f compose.prod.yaml config` validates with zero errors.
-- Stack contains zero `build:` instructions and zero host-exposed internal database ports.
+- [x] `docker compose -f compose.prod.yaml config` validates with zero errors.
+- [x] Stack contains zero `build:` instructions and zero host-exposed internal database ports.
+
 
 ---
 

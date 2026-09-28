@@ -2,21 +2,22 @@
 #  CivicPulse — Production Compose Stack (Phase 6 / Phase 14)
 # ═══════════════════════════════════════════════════════════════════════
 #  Usage:
+#    docker compose -f docker-compose.prod.yml config
 #    docker compose -f docker-compose.prod.yml up -d
 #
 #  Key properties:
 #    • Image-only deployment (no build: directives anywhere)
-#    • Pinned tags via ${IMAGE_TAG}
+#    • Pinned immutable tags via ${IMAGE_TAG} (never latest)
 #    • Two isolated networks: edge and internal (internal: true)
-#    • Database and cache not exposed to host or edge network
-#    • Named volumes with Redis AOF persistence
-#    • Resource limits and restart policies enforced
+#    • Database (PostgreSQL) and cache (Redis) not exposed to host
+#    • Named volumes with Redis AOF persistence and Postgres durability
+#    • Resource limits, healthchecks, and dependency conditions enforced
 # ═══════════════════════════════════════════════════════════════════════
 
 services:
-  # ── React Frontend ────────────────────────────────────────────────
+  # ── React Frontend (Edge Gateway / Reverse Proxy) ───────────────────
   frontend:
-    image: ${IMAGE_PREFIX:-}civicpulse-frontend:${IMAGE_TAG:-latest}
+    image: ${IMAGE_REGISTRY:-ghcr.io/i243137-oss}/civicpulse-frontend:${IMAGE_TAG:-v1.0.0}
     container_name: civicpulse-frontend
     ports:
       - "${FRONTEND_PORT:-80}:80"
@@ -43,7 +44,7 @@ services:
 
   # ── FastAPI Backend ───────────────────────────────────────────────
   backend:
-    image: ${IMAGE_PREFIX:-}civicpulse-backend:${IMAGE_TAG:-latest}
+    image: ${IMAGE_REGISTRY:-ghcr.io/i243137-oss}/civicpulse-backend:${IMAGE_TAG:-v1.0.0}
     container_name: civicpulse-backend
     command: sh -c "alembic upgrade head && python scripts/seed.py && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     ports:
@@ -83,7 +84,7 @@ services:
           memory: 128M
     restart: always
 
-  # ── PostgreSQL Database ───────────────────────────────────────────
+  # ── PostgreSQL Database (Isolated on Internal Network) ─────────────
   postgres:
     image: postgres:16-alpine
     container_name: civicpulse-postgres
@@ -111,7 +112,7 @@ services:
           memory: 128M
     restart: always
 
-  # ── Redis Cache & Rate Limiting ───────────────────────────────────
+  # ── Redis Cache & Rate Limiting (Isolated on Internal Network) ────
   redis:
     image: redis:7-alpine
     container_name: civicpulse-redis
@@ -138,12 +139,13 @@ services:
 
 networks:
   edge:
+    name: civicpulse_edge
     driver: bridge
   internal:
+    name: civicpulse_internal
     driver: bridge
     internal: true
 
 volumes:
   pgdata:
   redisdata:
-  ollama_models:

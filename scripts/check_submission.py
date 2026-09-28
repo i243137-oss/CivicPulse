@@ -38,6 +38,7 @@ def check_no_latest_tags():
     print("[2/7] Checking for forbidden ':latest' tags in manifests and compose files...")
     files_to_check = [
         ROOT / "compose.prod.yaml",
+        ROOT / "docker-compose.prod.yml",
         *list((ROOT / "infra" / "k8s").glob("**/*.yaml")),
     ]
     failed = False
@@ -57,6 +58,7 @@ def check_localhost_usage():
     print("[3/7] Checking for forbidden 'localhost' in service-to-service configs...")
     files_to_check = [
         ROOT / "compose.prod.yaml",
+        ROOT / "docker-compose.prod.yml",
         ROOT / "compose.yaml",
         *list((ROOT / "infra" / "k8s").glob("**/*.yaml")),
     ]
@@ -76,20 +78,24 @@ def check_localhost_usage():
     return not failed
 
 def check_prod_compose_ports():
-    print("[4/7] Checking compose.prod.yaml for exposed database/redis ports...")
-    prod_compose = ROOT / "compose.prod.yaml"
-    if not prod_compose.exists():
-        print("WARN: compose.prod.yaml not found.")
-        return True
-    content = prod_compose.read_text(encoding="utf-8")
+    print("[4/7] Checking production compose files for build instructions and exposed DB/cache ports...")
+    prod_files = [ROOT / "compose.prod.yaml", ROOT / "docker-compose.prod.yml"]
     failed = False
-    for line in content.splitlines():
-        if re.search(r'["\']?(5432:5432|6379:6379)["\']?', line):
-            print(f"FAIL: Public DB/Redis port published in compose.prod.yaml: {line.strip()}")
-            failed = True
+    for prod_compose in prod_files:
+        if not prod_compose.exists():
+            continue
+        content = prod_compose.read_text(encoding="utf-8")
+        for line_num, line in enumerate(content.splitlines(), 1):
+            if line.strip().startswith("build:"):
+                print(f"FAIL: Forbidden 'build:' directive found in {prod_compose.name}:{line_num}")
+                failed = True
+            if re.search(r'["\']?(5432:5432|6379:6379)["\']?', line):
+                print(f"FAIL: Public DB/Redis port published in {prod_compose.name}:{line_num}: {line.strip()}")
+                failed = True
     if not failed:
-        print("PASS: No database or cache ports published in compose.prod.yaml.")
+        print("PASS: Zero build directives and zero database/cache ports exposed in production Compose.")
     return not failed
+
 
 def check_k8s_postgres_pvc():
     print("[5/7] Checking PostgreSQL Kubernetes manifest for StatefulSet + PVC...")
