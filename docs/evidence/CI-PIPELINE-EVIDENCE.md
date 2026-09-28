@@ -4,7 +4,7 @@
 **Phase:** Phase 12 — Continuous Integration  
 **Role:** Member B (CI/CD, Workflows & Infrastructure Quality Gates)  
 **Date:** 2026-09-28  
-**Workflow File:** `.github/workflows/ci.yml`  
+**Workflow File:** `.github/workflows/ci.yml`
 
 ---
 
@@ -13,6 +13,7 @@
 Phase 12 implements an enterprise-grade Continuous Integration (CI) pipeline using **GitHub Actions**. The workflow enforces strict quality gates across both frontend and backend codebases, validates Kubernetes manifests against official Kubernetes 1.30.0 schemas, conducts automated container vulnerability scanning with Trivy, and executes a full-path Docker Compose end-to-end integration smoke test.
 
 ### Key Highlights
+
 - **Strict Dependency Gating (`needs: [...]`)**: No builds or integration tests execute if linting or unit tests fail.
 - **Least-Privilege Security**: Root-level `permissions: contents: read` blocks unauthorized token abuse.
 - **Zero Artifact Publishing from PRs**: Container builds use `push: false`. Release publishing is strictly isolated to Phase 13 CD.
@@ -73,6 +74,7 @@ flowchart TD
 ## 3. Job Specifications & Verification Matrix
 
 ### 3.1 `lint-and-type`
+
 - **Backend Linting & Formatting**:
   - `ruff check backend/app backend/tests`: Enforces flake8, isort, pyupgrade, and bugbear rules.
   - `ruff format --check backend/app backend/tests`: Enforces deterministic black-compatible formatting.
@@ -83,17 +85,20 @@ flowchart TD
   - `npx tsc --noEmit`: TypeScript compiler validation without output generation.
 
 ### 3.2 `test-backend`
+
 - **Environment**: Isolated service containers for `postgres:16-alpine` and `redis:7-alpine`.
 - **Command**: `pytest backend/tests --cov=backend/app --cov-report=term-missing --cov-report=xml --cov-fail-under=65`.
 - **Determinism**: Pinned to `TRIAGE_PROVIDER=simulated` and `ENVIRONMENT=testing`.
 - **Coverage**: Evaluated at **89%** code coverage (exceeds 65% minimum requirement).
 
 ### 3.3 `test-frontend`
+
 - **Runner**: Vitest v1.6.1 with JSDOM environment.
 - **Suites**: 6 test files covering `App`, `SubmitPage`, `DashboardPage`, `StatsPage`, `ErrorBoundary`, and `apiClient`.
 - **Total Tests**: 15 passed tests (exceeds rubric requirement of $\ge 5$).
 
 ### 3.4 `manifests`
+
 - **Tool**: `kubeconform` (v0.6.7) with Kubernetes v1.30.0 JSON schemas.
 - **Pipeline Command**:
   ```bash
@@ -106,15 +111,18 @@ flowchart TD
 - **Scope**: Validates Deployments, StatefulSet, Services, Ingress, NetworkPolicies, HPA, and PDBs within 20 seconds.
 
 ### 3.5 `build`
+
 - **Safety Rule**: `push: false`. Pull requests are strictly forbidden from publishing artifacts to registries.
 - **Buildx Export**: Builds `civicpulse-backend:ci` and `civicpulse-frontend:ci` and archives them as pipeline artifacts for downstream scanning and verification.
 
 ### 3.6 `scan`
+
 - **Scanner**: `aquasecurity/trivy-action@0.28.0`.
 - **Parameters**: `severity: 'CRITICAL,HIGH'`, `ignore-unfixed: true`, `exit-code: 1`.
 - **Targets**: Scans both backend and frontend Docker image layers.
 
 ### 3.7 `integration`
+
 - **Scope**: Direct validation of container interaction and network segmentation.
 - **Sequence**:
   1. Boot stack with `docker compose up -d --build`.
@@ -126,6 +134,7 @@ flowchart TD
   7. Tear down stack and purge volumes with `docker compose down -v`.
 
 ### 3.8 `ci-gate`
+
 - **Function**: Aggregates the exit status of all 7 prerequisite jobs via `needs: [...]` with `if: always()`.
 - **Enforcement**: If any prerequisite job reports a non-success status, `ci-gate` terminates with exit code 1, blocking branch merge.
 
@@ -137,7 +146,7 @@ A Python submission linting script (`scripts/check_submission.py`) enforces Sect
 
 ```
 ==================================================
-  CivicPulse — Pre-Submission Mechanical Checker  
+  CivicPulse — Pre-Submission Mechanical Checker
 ==================================================
 [1/7] Checking for forbidden tracked/committed .env files...
 PASS: .env is correctly gitignored and never committed.
@@ -161,16 +170,16 @@ ALL MECHANICAL PRE-SUBMISSION CHECKS PASSED (7/7)!
 
 ## 5. Exit Gate Compliance
 
-| Requirement | Implementation / Setting | Verification |
-| :--- | :--- | :---: |
-| Workflow Location | `.github/workflows/ci.yml` | Verified |
-| Trigger Branches | Push to `dev`, PR to `main` & `dev` | Verified |
-| Dependency Gating | `needs: [...]` across all jobs | Verified |
-| Least Privilege | `permissions: contents: read` | Verified |
-| Secret Hygiene | No secrets passed or printed; simulated provider in CI | Verified |
-| No Deployment from CI | Zero CD commands; `push: false` on image builds | Verified |
-| Backend Coverage | Pytest enforces $\ge 65\%$ (`--cov-fail-under=65`), measured at 89% | Verified |
-| Frontend Testing | 15 Vitest component tests pass | Verified |
-| Kubeconform Check | K8s 1.30 schema validation on rendered Kustomize manifests | Verified |
-| Trivy Image Scan | Configured for High/Critical gating with `--ignore-unfixed` | Verified |
-| Compose Integration | Automated POST, GET, and X-Cache MISS $\to$ HIT assertions | Verified |
+| Requirement           | Implementation / Setting                                            | Verification |
+| :-------------------- | :------------------------------------------------------------------ | :----------: |
+| Workflow Location     | `.github/workflows/ci.yml`                                          |   Verified   |
+| Trigger Branches      | Push to `dev`, PR to `main` & `dev`                                 |   Verified   |
+| Dependency Gating     | `needs: [...]` across all jobs                                      |   Verified   |
+| Least Privilege       | `permissions: contents: read`                                       |   Verified   |
+| Secret Hygiene        | No secrets passed or printed; simulated provider in CI              |   Verified   |
+| No Deployment from CI | Zero CD commands; `push: false` on image builds                     |   Verified   |
+| Backend Coverage      | Pytest enforces $\ge 65\%$ (`--cov-fail-under=65`), measured at 89% |   Verified   |
+| Frontend Testing      | 15 Vitest component tests pass                                      |   Verified   |
+| Kubeconform Check     | K8s 1.30 schema validation on rendered Kustomize manifests          |   Verified   |
+| Trivy Image Scan      | Configured for High/Critical gating with `--ignore-unfixed`         |   Verified   |
+| Compose Integration   | Automated POST, GET, and X-Cache MISS $\to$ HIT assertions          |   Verified   |
