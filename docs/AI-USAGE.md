@@ -22,7 +22,15 @@ Each entry follows this template:
 
 ## Log
 
+### 2026-09-28 — Phase 7: Backend Testing Architecture, Validation, and Full-Path Verification (Member A)
+
+- **Tool:** Google Antigravity (Gemini)
+- **Prompt summary:** Implement Member A backend testing architecture and quality gates for Phase 7 per assignment specifications. Add comprehensive schema validation test suite (`test_validation.py`) testing boundaries, enums, parameter constraints, and malformed UUID rejection. Add full-path backend integration test (`test_full_path_integration.py`) validating the complete lifecycle (probes, stats caching, auto-triage intake, write invalidation, duplicate content-hash cache, telemetry hit_rate, multi-filter pagination, state machine progression, conflict rejection, and stats consistency). Configure `[tool.coverage.run]` and `[tool.coverage.report]` with `fail_under = 85` in `pyproject.toml`. Verify clean SQLite engine disposal in migration tests and ensure complete air-gapped test execution with zero external paid AI dependencies.
+- **Output used:** `backend/pyproject.toml`, `backend/tests/test_validation.py`, `backend/tests/test_full_path_integration.py`, `backend/tests/test_migrations.py`, `backend/app/schemas/complaint.py`, `docs/ENGINEERING-NOTES.md`, and `docs/AI-USAGE.md`.
+- **Human review:** Executed complete test suite (84 passed, 1 skipped) with 90% total statement coverage on `backend/app/`, verified 0 linting errors (`ruff check`), and confirmed strict typing (`mypy`).
+
 ### 2026-09-27 — Phase 7: Testing, Quality, and Full-Path Verification (Member B)
+
 
 - **Tool:** Google Antigravity (Gemini)
 - **Prompt summary:** Implement Member B testing and quality gates for Phase 7 per assignment specifications. Add comprehensive full application integration test (`AppIntegration.test.tsx`) validating the complete user journey (Navbar navigation, complaint intake, automated triage feedback, detail inspection, status transition, list queue return). Fix cross-platform test execution in backend tests (`sys.executable -m alembic` and SQLAlchemy engine disposal on Windows SQLite temporary files). Verify frontend lint (`npm run lint`), type checking (`tsc --noEmit`), production build (`npm run build`), Vitest suite (15 passed tests across 6 suites), and backend test suite (72 passed tests with 90% coverage on `app/`).

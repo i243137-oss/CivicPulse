@@ -31,6 +31,34 @@ build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "asyncio: mark test as an asyncio coroutine",
+]
+filterwarnings = [
+    "ignore::starlette.testclient.StarletteDeprecationWarning",
+    "ignore::ResourceWarning",
+]
+
+[tool.coverage.run]
+source = ["app"]
+branch = true
+omit = [
+    "tests/*",
+    "scripts/*",
+    "alembic/*",
+]
+
+[tool.coverage.report]
+fail_under = 85
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
 
 [tool.ruff]
 line-length = 100
@@ -44,3 +72,4 @@ ignore = ["B008", "E501"]
 python_version = "3.12"
 strict = false
 ignore_missing_imports = true
+

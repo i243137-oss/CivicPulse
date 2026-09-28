@@ -69,7 +69,7 @@ class ComplaintResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def allowed_transitions(self) -> list[StatusEnum]:
         """Allowed transitions determined exclusively by the backend state machine."""
