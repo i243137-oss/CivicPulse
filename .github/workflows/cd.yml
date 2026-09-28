@@ -204,6 +204,10 @@ jobs:
           sed -i 's|image: .*civicpulse-backend:.*|image: ghcr.io/${{ steps.vars.outputs.owner_lower }}/civicpulse-backend:${{ github.sha }}|g' infra/k8s/base/backend-deployment.yaml
           sed -i 's|image: .*civicpulse-frontend:.*|image: ghcr.io/${{ steps.vars.outputs.owner_lower }}/civicpulse-frontend:${{ github.sha }}|g' infra/k8s/base/frontend-deployment.yaml
 
+      - name: Install VerticalPodAutoscaler CRD
+        run: |
+          kubectl apply -f infra/k8s/vpa-crd.yaml || kubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/master/vertical-pod-autoscaler/deploy/vpa-v1-crd-gen.yaml || true
+
       - name: Apply Production Kubernetes Manifests
         run: |
           kubectl apply -k overlays/prod
