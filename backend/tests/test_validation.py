@@ -258,3 +258,41 @@ def test_api_update_complaint_status_malformed_uuid_and_payload(client: TestClie
     # Valid UUID but empty body
     r3 = client.patch(f"/api/complaints/{valid_uuid}/status", json={})
     assert r3.status_code == 422
+
+
+# ==============================================================================
+# 3. Application Security & CORS Validation Tests (Phase 11)
+# ==============================================================================
+
+def test_cors_wildcard_with_credentials_rejected() -> None:
+    """Settings rejects wildcard CORS origins when allow_credentials is True."""
+    from app.core.config import Settings
+
+    with pytest.raises(ValidationError) as exc:
+        Settings(CORS_ORIGINS=["*"], CORS_ALLOW_CREDENTIALS=True)
+    assert "wildcard CORS_ORIGINS" in str(exc.value)
+
+
+def test_cors_wildcard_in_production_rejected() -> None:
+    """Settings rejects wildcard CORS origins in production environment."""
+    from app.core.config import Settings
+
+    with pytest.raises(ValidationError) as exc:
+        Settings(
+            ENVIRONMENT="production",
+            CORS_ORIGINS=["*"],
+            CORS_ALLOW_CREDENTIALS=False,
+        )
+    assert "prohibited in production" in str(exc.value)
+
+
+def test_cors_comma_separated_origins_parsed() -> None:
+    """Settings correctly parses comma-separated CORS origins string."""
+    from app.core.config import Settings
+
+    s = Settings(
+        CORS_ORIGINS="http://frontend.local,http://dashboard.local",
+        CORS_ALLOW_CREDENTIALS=True,
+    )
+    assert s.CORS_ORIGINS == ["http://frontend.local", "http://dashboard.local"]
+
