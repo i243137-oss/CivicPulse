@@ -215,16 +215,40 @@ jobs:
       - name: Wait for StatefulSet & Deployment Rollout Status
         run: |
           echo "Waiting for PostgreSQL StatefulSet rollout..."
-          kubectl rollout status statefulset/postgres -n civicpulse --timeout=180s
+          if ! kubectl rollout status statefulset/postgres -n civicpulse --timeout=120s; then
+            echo "--- Debug: Postgres Pods & Events ---"
+            kubectl get pods -n civicpulse
+            kubectl describe pods -n civicpulse -l app=postgres
+            kubectl logs -n civicpulse statefulset/postgres --tail=50
+            exit 1
+          fi
 
           echo "Waiting for Redis Deployment rollout..."
-          kubectl rollout status deployment/redis -n civicpulse --timeout=120s
+          if ! kubectl rollout status deployment/redis -n civicpulse --timeout=120s; then
+            echo "--- Debug: Redis Pods & Events ---"
+            kubectl get pods -n civicpulse
+            kubectl describe pods -n civicpulse -l app=redis
+            kubectl logs -n civicpulse deployment/redis --tail=50
+            exit 1
+          fi
 
           echo "Waiting for Backend Deployment rollout..."
-          kubectl rollout status deployment/backend -n civicpulse --timeout=180s
+          if ! kubectl rollout status deployment/backend -n civicpulse --timeout=180s; then
+            echo "--- Debug: Backend Pods & Events ---"
+            kubectl get pods -n civicpulse
+            kubectl describe pods -n civicpulse -l app=backend
+            kubectl logs -n civicpulse deployment/backend --tail=50
+            exit 1
+          fi
 
           echo "Waiting for Frontend Deployment rollout..."
-          kubectl rollout status deployment/frontend -n civicpulse --timeout=180s
+          if ! kubectl rollout status deployment/frontend -n civicpulse --timeout=120s; then
+            echo "--- Debug: Frontend Pods & Events ---"
+            kubectl get pods -n civicpulse
+            kubectl describe pods -n civicpulse -l app=frontend
+            kubectl logs -n civicpulse deployment/frontend --tail=50
+            exit 1
+          fi
 
       - name: Verify Ingress and HorizontalPodAutoscaler
         run: |

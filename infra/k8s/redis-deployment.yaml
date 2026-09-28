@@ -37,6 +37,8 @@ spec:
         app.kubernetes.io/part-of: civicpulse
     spec:
       automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 999
       containers:
         - name: redis
           image: redis:7-alpine
@@ -59,9 +61,6 @@ spec:
               memory: 256Mi
           securityContext:
             allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
             seccompProfile:
               type: RuntimeDefault
 
