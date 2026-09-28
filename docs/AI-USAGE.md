@@ -22,6 +22,13 @@ Each entry follows this template:
 
 ## Log
 
+### 2026-09-28 — Phase 8: Observability, JSON Logging, Probes, Prometheus Metrics, and Resilience
+
+- **Tool:** Google Antigravity (Gemini)
+- **Prompt summary:** Implement Phase 8 — Observability and Resilience for CivicPulse per assignment specifications. Add JSON structured logging (`StructuredJsonFormatter`) with required fields (`timestamp`, `level`, `service`, `logger`, `message`, `request_id`). Implement `RequestIdMiddleware` with coroutine-safe context variable propagation and HTTP response header attachment. Enforce strict separation between `/health` (pure zero-dependency liveness) and `/ready` (PostgreSQL `SELECT 1` and Redis `PING` readiness, returning HTTP 503 on dependency failure). Implement graceful SIGTERM/SIGINT drainage in FastAPI lifespan disposing database engine pool and closing Redis pool. Add standard Prometheus metrics endpoint (`GET /metrics`) capturing HTTP requests/duration, AI triage requests/duration, heuristic fallbacks, and cache hit/miss counters. Build comprehensive verification test suite (`test_observability.py`).
+- **Output used:** `backend/app/core/logging.py`, `backend/app/core/metrics.py`, `backend/app/routes/metrics.py`, `backend/app/core/rate_limit.py`, `backend/app/services/triage_service.py`, `backend/app/main.py`, `backend/tests/test_observability.py`, `backend/requirements.txt`, `backend/pyproject.toml`, `docs/ENGINEERING-NOTES.md`, and `docs/AI-USAGE.md`.
+- **Human review:** Executed complete test suite (95 passed, 1 skipped) with 88% overall statement coverage, 0 Ruff linting errors, 0 Mypy type issues across 59 source files, and 100% pass on all 11 Phase 8 observability/resilience test cases.
+
 ### 2026-09-28 — Phase 7: Backend Testing Architecture, Validation, and Full-Path Verification (Member A)
 
 - **Tool:** Google Antigravity (Gemini)
