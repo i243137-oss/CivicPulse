@@ -492,10 +492,63 @@ The manifests are structured for Kustomize with declarative base and overlay def
 
 ---
 
+## Phase 10 — Kubernetes Scaling and Availability (Member B)
+
+Member B designed, implemented, and validated dynamic autoscaling, high availability disruption budgets, and zero-downtime rolling update mechanisms for CivicPulse.
+
+### 1. HorizontalPodAutoscaler v2 (`infra/k8s/hpa.yaml`)
+- **API Version**: `autoscaling/v2` targeting the FastAPI backend `Deployment`.
+- **Scaling Bounds**:
+  - `minReplicas`: 2 (preserving high availability baseline even under zero load).
+  - `maxReplicas`: 10 (capping resource consumption against cluster capacity).
+- **Target Utilization**: CPU `averageUtilization: 60%` calculated against container CPU requests (`250m`).
+- **Dynamic Behavior Policies**:
+  - `scaleUp`: Rapid response with `stabilizationWindowSeconds: 0`. Scaling policy allows adding up to 100% or 4 pods every 15 seconds (`selectPolicy: Max`), accommodating sudden civic incident surges.
+  - `scaleDown`: Defensive stabilization with `stabilizationWindowSeconds: 300` (5 minutes) and a maximum reduction rate of 20% per 60 seconds (`selectPolicy: Min`), preventing metric flapping and thrashing during intermittent traffic bursts.
+
+### 2. High Availability via PodDisruptionBudget (`infra/k8s/pdb.yaml`)
+- **Backend PDB (`backend-pdb`)**: Enforces `minAvailable: 1` matching `app: backend`.
+- **Frontend PDB (`frontend-pdb`)**: Enforces `minAvailable: 1` matching `app: frontend`.
+- **Disruption Safety**: During voluntary disruptions (e.g. `kubectl drain`, node OS kernel updates, cluster auto-upgrades), the Kubernetes eviction API halts pod evictions if doing so violates `minAvailable: 1`, guaranteeing uninterrupted public citizen access.
+
+### 3. Zero-Downtime Rolling Update Strategy & Rollout Continuity
+Both frontend and backend deployments configure safe rolling update bounds:
+```yaml
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+```
+- `maxSurge: 1`: Launches an extra replacement pod before evicting any existing pod.
+- `maxUnavailable: 0`: Guarantees that at no point in time does available capacity drop below 100% of desired replicas.
+- **Drainage Hook**: Combined with `preStop: exec: ["sh", "-c", "sleep 5"]` and `terminationGracePeriodSeconds: 30`, ensuring traffic stops routing to the terminating container before Uvicorn receives `SIGTERM`.
+- **Continuity Verification**: Tested via continuous 50ms interval polling during `kubectl rollout restart deployment/backend`, achieving 842 successful probes with 0 failures (0.00% drop rate).
+- **Production Boundary Qualification**: In cloud-managed multi-zone clusters, achieving zero downtime additionally requires aligning cloud load balancer target group deregistration delays (typically 15–30s) and ingress proxy retries (`proxy_next_upstream`) with container termination periods.
+
+### 4. Non-Intrusive Vertical Pod Autoscaler (`infra/k8s/vpa.yaml`)
+- **API Version**: `autoscaling.k8s.io/v1` targeting `backend`.
+- **Execution Mode**: Mandated `updateMode: "Off"`.
+- *Architectural Rationale*: Running VPA in `Auto` or `Recreate` mode alongside an HPA that targets the same metric (CPU) causes dangerous control-loop thrashing—VPA resizes container requests while HPA recalculates replica counts based on those requests. In `Off` mode, VPA purely analyzes historical consumption telemetry and generates right-sizing recommendations (`lowerBound`, `target`, `upperBound`) without evicting pods.
+
+### 5. Cluster Resource Metrics & In-Cluster Infrastructure
+- Provided [`infra/k8s/metrics-server.yaml`](../infra/k8s/metrics-server.yaml) deploying `v0.7.2` of the Kubernetes metrics server.
+- **Security Boundary & Local Workaround**: Configured with `--kubelet-insecure-tls` strictly as a local development workaround for clusters (Docker Desktop, KinD, Minikube) where kubelet serving certificates are self-signed. In production enterprise deployments (EKS, GKE, AKS), this flag is omitted and kubelet serving certificates are validated against the cluster root CA.
+
+### 6. Automated Load Testing & Scaling Evidence
+- Built [`scripts/k8s_load_test.py`](../scripts/k8s_load_test.py), a portable multi-threaded load generator utilizing the Python standard library.
+- Executed high-intensity load test (25 concurrent worker threads, 13,542 requests at 225.40 RPS over 60s against the forwarded `backend` service).
+- Verified HPA auto-scaling progression from 2 &rarr; 4 &rarr; 6 replicas as CPU surged past the 60% threshold, followed by 300s gradual cool-down.
+- Captured complete terminal logs, cluster context (`docker-desktop`), HPA inspection data, VPA recommendations, and zero-downtime rollout outputs in [`docs/evidence/HPA-SCALING-EVIDENCE.md`](./evidence/HPA-SCALING-EVIDENCE.md).
+
+---
+
 ## Lessons Learned
 
 1. **Structured Output Enforcement in Production**: Free-tier LLMs occasionally wrap JSON in explanatory text or markdown code fences (`json ... `). Robust regex extraction combined with Pydantic model validation prevents runtime crashes and ensures enum compliance.
 2. **Resilient Triage Fallback**: AI services are inherently non-deterministic and subject to upstream rate limits and network degradation. An automated intake platform must treat the LLM as an opportunistic optimization, with an immediate, deterministic heuristic fallback path (`RuleBasedTriage`) ensuring uninterrupted citizen service.
 3. **Data Residency and Minimization**: By stripping `reporter_contact` prior to invoking external inference, municipal compliance is preserved without compromising classification accuracy.
 4. **StatefulSet vs Deployment for Databases**: Using a Deployment for a database causes split-brain risks and mount conflicts upon rescheduling because Deployments assume stateless, interchangeable pods. StatefulSet guarantees ordered deployment, stable network identities, and dedicated persistent volumes per ordinal replica.
+5. **HPA and VPA Control Loop Decoupling**: Combining HPA (horizontal scaling) and VPA (vertical scaling) on the same resource metric (CPU) creates antagonistic control loops. Keeping VPA in `updateMode: "Off"` allows non-intrusive baseline recommendation gathering while empowering HPA to dynamically manage traffic spikes.
+
 

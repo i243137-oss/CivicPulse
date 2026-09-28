@@ -85,18 +85,18 @@ Create production-grade Kubernetes manifests deploying CivicPulse into a dedicat
 Implement dynamic horizontal pod autoscaling, ensure zero-downtime rolling update safety using PodDisruptionBudgets, configure Vertical Pod Autoscaler in `Off` mode, and capture load-test scaling evidence.
 
 **Scope (Member B)**:
-- [ ] Configure `HorizontalPodAutoscaler` (`hpa.yaml`) targeting backend Deployment with `minReplicas: 2`, `maxReplicas: 10`, and target CPU utilization `60%`.
-- [ ] Implement `PodDisruptionBudget` (`pdb.yaml`) for backend and frontend (`minAvailable: 1` or `maxUnavailable: 1`) to preserve service availability during node drains or rolling updates.
-- [ ] Configure zero-downtime rolling update strategy (`maxSurge: 1`, `maxUnavailable: 0`) in Deployments.
-- [ ] Configure Vertical Pod Autoscaler (`vpa.yaml`) in `updateMode: "Off"` to capture resource recommendation baseline.
-- [ ] Ensure cluster `metrics-server` is deployed and operational.
-- [ ] Execute an automated load test (e.g. using `k6`, `locust`, or `hey`) to trigger HPA scaling from 2 to $\ge 4$ replicas.
-- [ ] Capture evidence artifacts: terminal recording of `kubectl get hpa -w`, `kubectl describe vpa`, and load-test metrics.
+- [x] Configure `HorizontalPodAutoscaler` (`hpa.yaml`) targeting backend Deployment with `minReplicas: 2`, `maxReplicas: 10`, and target CPU utilization `60%`.
+- [x] Implement `PodDisruptionBudget` (`pdb.yaml`) for backend and frontend (`minAvailable: 1` or `maxUnavailable: 1`) to preserve service availability during node drains or rolling updates.
+- [x] Configure zero-downtime rolling update strategy (`maxSurge: 1`, `maxUnavailable: 0`) in Deployments.
+- [x] Configure Vertical Pod Autoscaler (`vpa.yaml`) in `updateMode: "Off"` to capture resource recommendation baseline.
+- [x] Ensure cluster `metrics-server` is deployed and operational (`infra/k8s/metrics-server.yaml`).
+- [x] Execute an automated load test (`scripts/k8s_load_test.py`) to trigger HPA scaling from 2 to $\ge 4$ replicas.
+- [x] Capture evidence artifacts: terminal recording of `kubectl get hpa -w`, `kubectl describe vpa`, and load-test metrics in `docs/evidence/HPA-SCALING-EVIDENCE.md`.
 
 #### Exit Gate
-- HPA automatically scales backend pods upwards when traffic spikes and scales back down when traffic subsides.
-- PodDisruptionBudget prevents downtime during node maintenance.
-- Evidence files saved under `docs/evidence/`.
+- [x] HPA automatically scales backend pods upwards when traffic spikes and scales back down when traffic subsides.
+- [x] PodDisruptionBudget prevents downtime during node maintenance.
+- [x] Evidence files saved under `docs/evidence/`.
 
 ---
 
