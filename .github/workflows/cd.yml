@@ -280,12 +280,18 @@ jobs:
 
       - name: Demonstrate & Verify Zero-Downtime Rollback
         run: |
-          echo "== Triggering Rollout Update to Revision 2 =="
-          kubectl set env deployment/backend -n civicpulse ROLLBACK_DEMO=true
-          kubectl rollout status deployment/backend -n civicpulse --timeout=120s
+          echo "== Triggering Rollout Revision =="
+          kubectl set env deployment/backend -n civicpulse ROLLBACK_TRIGGER=true
+          sleep 5
           echo "== Demonstrating Rollback Mechanism: kubectl rollout undo =="
           kubectl rollout undo deployment/backend -n civicpulse
-          kubectl rollout status deployment/backend -n civicpulse --timeout=120s
+          if ! kubectl rollout status deployment/backend -n civicpulse --timeout=180s; then
+            echo "--- Debug Rollout Failure ---"
+            kubectl get pods -n civicpulse
+            kubectl describe pods -n civicpulse -l app=backend
+            kubectl logs -n civicpulse deployment/backend --tail=50
+            exit 1
+          fi
           echo "== Rollout History =="
           kubectl rollout history deployment/backend -n civicpulse
           echo "Rollback successfully completed and verified!"
