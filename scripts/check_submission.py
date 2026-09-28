@@ -107,13 +107,18 @@ def check_k8s_postgres_pvc():
     return True
 
 def check_ci_workflows():
-    print("[6/7] Checking CI workflow for required jobs, needs: gating, and permissions...")
+    print("[6/7] Checking CI and CD workflows for required jobs, needs: gating, and permissions...")
     ci_file = ROOT / ".github" / "workflows" / "ci.yml"
+    cd_file = ROOT / ".github" / "workflows" / "cd.yml"
     if not ci_file.exists():
         print("FAIL: .github/workflows/ci.yml not found.")
         return False
-    content = ci_file.read_text(encoding="utf-8")
-    required_keywords = [
+    if not cd_file.exists():
+        print("FAIL: .github/workflows/cd.yml not found.")
+        return False
+    ci_content = ci_file.read_text(encoding="utf-8")
+    cd_content = cd_file.read_text(encoding="utf-8")
+    ci_keywords = [
         "permissions:",
         "contents: read",
         "lint-and-type",
@@ -126,13 +131,25 @@ def check_ci_workflows():
         "ci-gate",
         "needs:",
     ]
+    cd_keywords = [
+        "permissions:",
+        "packages: write",
+        "needs: [test]",
+        "needs: [build-push]",
+        "deploy-k8s",
+        "rollout undo",
+    ]
     failed = False
-    for kw in required_keywords:
-        if kw not in content:
+    for kw in ci_keywords:
+        if kw not in ci_content:
             print(f"FAIL: Missing required keyword/job '{kw}' in ci.yml")
             failed = True
+    for kw in cd_keywords:
+        if kw not in cd_content:
+            print(f"FAIL: Missing required keyword/job '{kw}' in cd.yml")
+            failed = True
     if not failed:
-        print("PASS: CI workflow contains all required jobs, permissions, and dependency gates.")
+        print("PASS: CI and CD workflows contain all required jobs, permissions, and dependency gates.")
     return not failed
 
 def check_secret_placeholders():
