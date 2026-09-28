@@ -22,6 +22,13 @@ Each entry follows this template:
 
 ## Log
 
+### 2026-09-28 — Phase 10: Kubernetes Scaling, Availability, HPA v2, and PDB (Member B)
+
+- **Tool:** Google Antigravity (Gemini)
+- **Prompt summary:** Implement Phase 10 Kubernetes autoscaling and availability mechanisms for CivicPulse per assignment specifications. Configure HorizontalPodAutoscaler v2 (`infra/k8s/hpa.yaml`) targeting backend Deployment with `minReplicas: 2`, `maxReplicas: 10`, and target CPU utilization `60%`. Implement dynamic scale-up policies and 300s scale-down stabilization window. Implement PodDisruptionBudget (`infra/k8s/pdb.yaml`) for backend and frontend with `minAvailable: 1`. Validate zero-downtime rolling update strategy (`maxSurge: 1, maxUnavailable: 0`) and connection draining `preStop` hooks. Configure VerticalPodAutoscaler (`infra/k8s/vpa.yaml`) in `updateMode: "Off"` to capture resource recommendation baselines without pod restarts. Provide cluster `metrics-server` manifest (`infra/k8s/metrics-server.yaml`). Create portable load-testing script (`scripts/k8s_load_test.py`) and capture complete scaling, rollout, and VPA recommendation evidence under `docs/evidence/HPA-SCALING-EVIDENCE.md`.
+- **Output used:** `infra/k8s/hpa.yaml`, `infra/k8s/pdb.yaml`, `infra/k8s/vpa.yaml`, `infra/k8s/metrics-server.yaml`, `infra/k8s/base/hpa.yaml`, `infra/k8s/base/pdb.yaml`, `infra/k8s/base/vpa.yaml`, `infra/k8s/base/kustomization.yaml`, `infra/k8s/kustomization.yaml`, `scripts/k8s_load_test.py`, `docs/evidence/HPA-SCALING-EVIDENCE.md`, `docs/ENGINEERING-NOTES.md`, and `docs/AI-USAGE.md`.
+- **Human review:** Validated `kubectl kustomize infra/k8s/`, `kubectl kustomize infra/k8s/overlays/dev`, and `kubectl kustomize infra/k8s/overlays/prod`. Verified HPA target CPU 60%, min 2, max 10. Verified PDB minAvailable 1. Verified VPA Off mode. Verified load testing script execution (13,542 requests, 225 RPS) and scaling evidence documentation.
+
 ### 2026-09-28 — Phase 9: Kubernetes Baseline Manifests, StatefulSet, Deployments, and Ingress (Member B)
 
 - **Tool:** Google Antigravity (Gemini)
@@ -42,10 +49,9 @@ Each entry follows this template:
 - **Prompt summary:** Implement Member A backend testing architecture and quality gates for Phase 7 per assignment specifications. Add comprehensive schema validation test suite (`test_validation.py`) testing boundaries, enums, parameter constraints, and malformed UUID rejection. Add full-path backend integration test (`test_full_path_integration.py`) validating the complete lifecycle (probes, stats caching, auto-triage intake, write invalidation, duplicate content-hash cache, telemetry hit_rate, multi-filter pagination, state machine progression, conflict rejection, and stats consistency). Configure `[tool.coverage.run]` and `[tool.coverage.report]` with `fail_under = 85` in `pyproject.toml`. Verify clean SQLite engine disposal in migration tests and ensure complete air-gapped test execution with zero external paid AI dependencies.
 - **Output used:** `backend/pyproject.toml`, `backend/tests/test_validation.py`, `backend/tests/test_full_path_integration.py`, `backend/tests/test_migrations.py`, `backend/app/schemas/complaint.py`, `docs/ENGINEERING-NOTES.md`, and `docs/AI-USAGE.md`.
 - **Human review:** Executed complete test suite (84 passed, 1 skipped) with 90% total statement coverage on `backend/app/`, verified 0 linting errors (`ruff check`), and confirmed strict typing (`mypy`).
-
+  > > > > > > > origin/dev
 
 ### 2026-09-27 — Phase 7: Testing, Quality, and Full-Path Verification (Member B)
-
 
 - **Tool:** Google Antigravity (Gemini)
 - **Prompt summary:** Implement Member B testing and quality gates for Phase 7 per assignment specifications. Add comprehensive full application integration test (`AppIntegration.test.tsx`) validating the complete user journey (Navbar navigation, complaint intake, automated triage feedback, detail inspection, status transition, list queue return). Fix cross-platform test execution in backend tests (`sys.executable -m alembic` and SQLAlchemy engine disposal on Windows SQLite temporary files). Verify frontend lint (`npm run lint`), type checking (`tsc --noEmit`), production build (`npm run build`), Vitest suite (15 passed tests across 6 suites), and backend test suite (72 passed tests with 90% coverage on `app/`).
