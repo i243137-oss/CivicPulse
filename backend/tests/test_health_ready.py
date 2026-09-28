@@ -31,6 +31,7 @@ def test_ready_readiness_healthy_db(client: TestClient) -> None:
 
 def test_ready_readiness_db_failure_returns_503(client: TestClient) -> None:
     """Readiness probe returns 503 Service Unavailable if database is unreachable."""
+
     class BrokenSession:
         async def execute(self, *args, **kwargs):
             raise ConnectionRefusedError("Database connection lost")

@@ -162,6 +162,5 @@ class LLMTriage:
         raise TriageError("LLM triage failed with unknown state", provider=self.name)
 
 
-
 # Alias for backward compatibility
 LLMTriageProvider = LLMTriage

@@ -88,7 +88,11 @@ class TriageResult(BaseModel):
             if "category" in data and isinstance(data["category"], str):
                 data["category"] = data["category"].lower().strip()
             # Enforce max 140 characters if model exceeds limit slightly
-            if "summary" in data and isinstance(data["summary"], str) and len(data["summary"]) > 140:
+            if (
+                "summary" in data
+                and isinstance(data["summary"], str)
+                and len(data["summary"]) > 140
+            ):
                 data["summary"] = data["summary"][:137] + "..."
         return data
 

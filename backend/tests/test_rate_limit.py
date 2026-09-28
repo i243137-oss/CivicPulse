@@ -22,25 +22,33 @@ async def test_atomic_rate_limiter_sliding_window(fake_redis) -> None:
     client_id = "test-client-1"
 
     # Request 1: allowed, 2 remaining
-    allowed1, rem1, retry1 = await limiter.is_allowed(fake_redis, client_id, limit=3, window_seconds=60)
+    allowed1, rem1, retry1 = await limiter.is_allowed(
+        fake_redis, client_id, limit=3, window_seconds=60
+    )
     assert allowed1 is True
     assert rem1 == 2
     assert retry1 == 0
 
     # Request 2: allowed, 1 remaining
-    allowed2, rem2, retry2 = await limiter.is_allowed(fake_redis, client_id, limit=3, window_seconds=60)
+    allowed2, rem2, retry2 = await limiter.is_allowed(
+        fake_redis, client_id, limit=3, window_seconds=60
+    )
     assert allowed2 is True
     assert rem2 == 1
     assert retry2 == 0
 
     # Request 3: allowed, 0 remaining
-    allowed3, rem3, retry3 = await limiter.is_allowed(fake_redis, client_id, limit=3, window_seconds=60)
+    allowed3, rem3, retry3 = await limiter.is_allowed(
+        fake_redis, client_id, limit=3, window_seconds=60
+    )
     assert allowed3 is True
     assert rem3 == 0
     assert retry3 == 0
 
     # Request 4: BLOCKED (exceeds limit 3)
-    allowed4, rem4, retry4 = await limiter.is_allowed(fake_redis, client_id, limit=3, window_seconds=60)
+    allowed4, rem4, retry4 = await limiter.is_allowed(
+        fake_redis, client_id, limit=3, window_seconds=60
+    )
     assert allowed4 is False
     assert rem4 == 0
     assert retry4 > 0  # Retry-After must be calculated in seconds
@@ -55,7 +63,9 @@ def test_rate_limit_headers_on_successful_request(client: TestClient) -> None:
     assert int(response.headers["X-RateLimit-Remaining"]) >= 0
 
 
-def test_rate_limit_exceeded_returns_429(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_rate_limit_exceeded_returns_429(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """When the request limit is reached, middleware returns HTTP 429 with Retry-After."""
     from app.core import config
 

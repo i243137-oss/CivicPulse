@@ -218,4 +218,3 @@ def test_complete_application_path_integration_journey(client: TestClient) -> No
     assert final_stats["by_status"].get("resolved", 0) == 1
     assert final_stats["by_category"].get("water", 0) == 2
     assert final_stats["by_category"].get("electricity", 0) == 1
-

@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class TriageExecutionOutcome:
     """Metadata describing a completed triage execution."""
+
     result: TriageResult
     triaged_by: str
     triage_latency_ms: int
@@ -60,7 +61,9 @@ class TriageService:
         normalized = f"{text.strip().lower()}|{location.strip().lower()}"
         return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
-    async def get_cached_result(self, redis: Redis | None, content_hash: str) -> TriageResult | None:
+    async def get_cached_result(
+        self, redis: Redis | None, content_hash: str
+    ) -> TriageResult | None:
         """Lookup previously classified triage result from Redis cache."""
         if redis is None:
             return None
@@ -94,7 +97,11 @@ class TriageService:
         try:
             payload = result.model_dump_json()
             await redis.set(key, payload, ex=ttl_seconds)
-            logger.debug("Stored triage result in cache for hash %s (TTL: %ds)", content_hash[:12], ttl_seconds)
+            logger.debug(
+                "Stored triage result in cache for hash %s (TTL: %ds)",
+                content_hash[:12],
+                ttl_seconds,
+            )
         except Exception as exc:
             logger.warning("Redis triage cache write error: %s", exc)
 
@@ -121,7 +128,10 @@ class TriageService:
             if cached_result is not None:
                 try:
                     from app.core.metrics import CACHE_REQUESTS_TOTAL
-                    CACHE_REQUESTS_TOTAL.labels(cache_type="triage_content_hash", result="hit").inc()
+
+                    CACHE_REQUESTS_TOTAL.labels(
+                        cache_type="triage_content_hash", result="hit"
+                    ).inc()
                 except Exception:
                     pass
 
@@ -137,6 +147,7 @@ class TriageService:
 
         try:
             from app.core.metrics import CACHE_REQUESTS_TOTAL
+
             CACHE_REQUESTS_TOTAL.labels(cache_type="triage_content_hash", result="miss").inc()
         except Exception:
             pass
@@ -154,8 +165,13 @@ class TriageService:
 
             try:
                 from app.core.metrics import AI_TRIAGE_DURATION_SECONDS, AI_TRIAGE_REQUESTS_TOTAL
-                AI_TRIAGE_REQUESTS_TOTAL.labels(provider=self.primary_provider.name, status="success").inc()
-                AI_TRIAGE_DURATION_SECONDS.labels(provider=self.primary_provider.name).observe(latency_ms / 1000.0)
+
+                AI_TRIAGE_REQUESTS_TOTAL.labels(
+                    provider=self.primary_provider.name, status="success"
+                ).inc()
+                AI_TRIAGE_DURATION_SECONDS.labels(provider=self.primary_provider.name).observe(
+                    latency_ms / 1000.0
+                )
             except Exception:
                 pass
 
@@ -176,7 +192,10 @@ class TriageService:
 
             try:
                 from app.core.metrics import AI_FALLBACK_TOTAL, AI_TRIAGE_REQUESTS_TOTAL
-                AI_TRIAGE_REQUESTS_TOTAL.labels(provider=self.primary_provider.name, status="failure").inc()
+
+                AI_TRIAGE_REQUESTS_TOTAL.labels(
+                    provider=self.primary_provider.name, status="failure"
+                ).inc()
                 AI_FALLBACK_TOTAL.labels(
                     from_provider=self.primary_provider.name,
                     to_provider=self.fallback_provider.name,
@@ -252,4 +271,3 @@ class TriageService:
             "total_requests": total,
             "hit_rate": hit_rate,
         }
-

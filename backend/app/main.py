@@ -39,7 +39,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """
     logger.info(
         "CivicPulse backend starting up",
-        extra={"service": settings.APP_NAME, "version": settings.APP_VERSION, "env": settings.ENVIRONMENT},
+        extra={
+            "service": settings.APP_NAME,
+            "version": settings.APP_VERSION,
+            "env": settings.ENVIRONMENT,
+        },
     )
     yield
     # Graceful shutdown: log initiation and cleanly close pools
@@ -47,6 +51,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     try:
         from app.db.session import engine
+
         await engine.dispose()
         logger.info("Database engine connection pool disposed successfully")
     except Exception as exc:
@@ -96,4 +101,3 @@ app.include_router(meta_router)
 def root() -> dict[str, str]:
     """Minimal root route so a bare GET / doesn't 404 during manual checks."""
     return {"service": settings.APP_NAME, "environment": settings.ENVIRONMENT}
-

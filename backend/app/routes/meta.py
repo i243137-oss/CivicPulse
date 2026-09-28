@@ -42,7 +42,9 @@ async def get_providers_meta(
 ) -> ProviderInfoResponse:
     """Return active provider configuration, measured cache hit rate, and triage telemetry."""
     provider = triage_service.primary_provider
-    provider_name = getattr(provider, "name", getattr(provider, "provider_id", provider.__class__.__name__))
+    provider_name = getattr(
+        provider, "name", getattr(provider, "provider_id", provider.__class__.__name__)
+    )
     recent = triage_service.get_recent_outcomes()
     cache_data = await triage_service.get_cache_metrics(redis)
 

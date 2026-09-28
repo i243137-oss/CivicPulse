@@ -110,9 +110,7 @@ class DistributedRateLimiter:
             return allowed, remaining, retry_after
         except ResponseError as err:
             if "unknown command 'eval'" in str(err).lower():
-                return await self._pipeline_is_allowed(
-                    redis, key, now_ms, window_ms, max_requests
-                )
+                return await self._pipeline_is_allowed(redis, key, now_ms, window_ms, max_requests)
             logger.warning("Redis rate limit evaluation error: %s", err)
             return True, max_requests, 0
         except Exception as exc:

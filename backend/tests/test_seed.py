@@ -34,7 +34,9 @@ async def test_seed_idempotency_and_minimum_record_count(setup_test_db: None) ->
             assert count == inserted_1
 
             # Verify categories are represented
-            categories = (await session.execute(select(Complaint.category).distinct())).scalars().all()
+            categories = (
+                (await session.execute(select(Complaint.category).distinct())).scalars().all()
+            )
             for required_cat in CategoryEnum:
                 assert required_cat in categories
 

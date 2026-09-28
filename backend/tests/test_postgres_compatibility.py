@@ -35,8 +35,14 @@ def test_complaint_table_postgres_ddl_compilation() -> None:
     assert "TIMESTAMP WITH TIME ZONE" in ddl
 
     # Assert check constraints
-    assert "CONSTRAINT ck_complaints_text_length CHECK (length(text) >= 10 AND length(text) <= 2000)" in ddl
-    assert "CONSTRAINT ck_complaints_location_length CHECK (length(location) >= 3 AND length(location) <= 200)" in ddl
+    assert (
+        "CONSTRAINT ck_complaints_text_length CHECK (length(text) >= 10 AND length(text) <= 2000)"
+        in ddl
+    )
+    assert (
+        "CONSTRAINT ck_complaints_location_length CHECK (length(location) >= 3 AND length(location) <= 200)"
+        in ddl
+    )
 
     # Assert table structure
     assert "CREATE TABLE complaints" in ddl
@@ -55,7 +61,10 @@ def test_postgres_indexes_compilation() -> None:
     status_priority_sql = str(
         CreateIndex(indexes["ix_complaints_status_priority"]).compile(dialect=pg_dialect)
     )
-    assert "CREATE INDEX ix_complaints_status_priority ON complaints (status, priority)" in status_priority_sql
+    assert (
+        "CREATE INDEX ix_complaints_status_priority ON complaints (status, priority)"
+        in status_priority_sql
+    )
 
     created_at_sql = str(
         CreateIndex(indexes["ix_complaints_created_at"]).compile(dialect=pg_dialect)
@@ -81,13 +90,21 @@ def test_repository_queries_postgres_compilation() -> None:
     compiled_stmt = str(stmt.compile(dialect=pg_dialect))
     assert "FROM complaints" in compiled_stmt
     assert "ORDER BY complaints.created_at DESC" in compiled_stmt
-    assert "LIMIT %(param_1)s OFFSET %(param_2)s" in compiled_stmt or "LIMIT $1 OFFSET $2" in compiled_stmt or "LIMIT" in compiled_stmt
+    assert (
+        "LIMIT %(param_1)s OFFSET %(param_2)s" in compiled_stmt
+        or "LIMIT $1 OFFSET $2" in compiled_stmt
+        or "LIMIT" in compiled_stmt
+    )
 
     # 2. Statistics aggregation queries
     cat_stmt = select(Complaint.category, func.count()).group_by(Complaint.category)
     compiled_cat = str(cat_stmt.compile(dialect=pg_dialect))
     assert "GROUP BY complaints.category" in compiled_cat
-    assert "count(*)" in compiled_cat.lower() or "count(1)" in compiled_cat.lower() or "count(" in compiled_cat.lower()
+    assert (
+        "count(*)" in compiled_cat.lower()
+        or "count(1)" in compiled_cat.lower()
+        or "count(" in compiled_cat.lower()
+    )
 
     status_stmt = select(Complaint.status, func.count()).group_by(Complaint.status)
     compiled_status = str(status_stmt.compile(dialect=pg_dialect))
@@ -202,9 +219,12 @@ async def test_live_postgresql_if_available() -> None:
     """Run live asyncpg roundtrip if a PostgreSQL server is reachable in the environment."""
     test_pg_url = os.environ.get("TEST_POSTGRES_URL")
     if not test_pg_url:
-        pytest.skip("No TEST_POSTGRES_URL configured. Live PostgreSQL test skipped; dialect compilation tests passed.")
+        pytest.skip(
+            "No TEST_POSTGRES_URL configured. Live PostgreSQL test skipped; dialect compilation tests passed."
+        )
 
     import asyncpg  # type: ignore[import-untyped]
+
     try:
         conn = await asyncpg.connect(test_pg_url)
         val = await conn.fetchval("SELECT 1")

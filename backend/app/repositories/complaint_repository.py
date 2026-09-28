@@ -71,11 +71,7 @@ class ComplaintRepository:
         query_stmt = select(Complaint)
         if conditions:
             query_stmt = query_stmt.where(*conditions)
-        query_stmt = (
-            query_stmt.order_by(Complaint.created_at.desc())
-            .offset(skip)
-            .limit(limit)
-        )
+        query_stmt = query_stmt.order_by(Complaint.created_at.desc()).offset(skip).limit(limit)
 
         rows_result = await self.session.execute(query_stmt)
         complaints = list(rows_result.scalars().all())
@@ -103,17 +99,25 @@ class ComplaintRepository:
         # Group by status
         status_stmt = select(Complaint.status, func.count(Complaint.id)).group_by(Complaint.status)
         status_rows = (await self.session.execute(status_stmt)).all()
-        by_status = {s.value if isinstance(s, StatusEnum) else str(s): count for s, count in status_rows}
+        by_status = {
+            s.value if isinstance(s, StatusEnum) else str(s): count for s, count in status_rows
+        }
 
         # Group by category
         cat_stmt = select(Complaint.category, func.count(Complaint.id)).group_by(Complaint.category)
         cat_rows = (await self.session.execute(cat_stmt)).all()
-        by_category = {c.value if isinstance(c, CategoryEnum) else str(c): count for c, count in cat_rows}
+        by_category = {
+            c.value if isinstance(c, CategoryEnum) else str(c): count for c, count in cat_rows
+        }
 
         # Group by priority
-        prio_stmt = select(Complaint.priority, func.count(Complaint.id)).group_by(Complaint.priority)
+        prio_stmt = select(Complaint.priority, func.count(Complaint.id)).group_by(
+            Complaint.priority
+        )
         prio_rows = (await self.session.execute(prio_stmt)).all()
-        by_priority = {p.value if isinstance(p, PriorityEnum) else str(p): count for p, count in prio_rows}
+        by_priority = {
+            p.value if isinstance(p, PriorityEnum) else str(p): count for p, count in prio_rows
+        }
 
         return {
             "total": total,

@@ -22,6 +22,13 @@ Each entry follows this template:
 
 ## Log
 
+### 2026-09-28 — Phase 12: Continuous Integration Pipeline, Kubeconform, Trivy & Compose Integration Smoke Test (Member B)
+
+- **Tool:** Google Antigravity (Gemini)
+- **Prompt summary:** Implement Phase 12 Continuous Integration pipeline using GitHub Actions per assignment specifications and rubric. Create `.github/workflows/ci.yml` triggered on push to `dev` and pull requests to `main` and `dev`. Define strict job dependencies (`needs: [...]`) across 8 jobs (`lint-and-type`, `test-backend`, `test-frontend`, `manifests`, `build`, `scan`, `integration`, and `ci-gate`). Use least-privilege `permissions: contents: read`. Integrate Ruff linting/formatting and MyPy static type checks for backend; ESLint and TypeScript compilation for frontend. Run Pytest with PostgreSQL and Redis service containers enforcing code coverage >= 65% with simulated AI provider. Execute Vitest component test suite (15 passed tests). Validate rendered Kubernetes production manifests with `kubeconform` against K8s 1.30 schemas. Build container images via Buildx without publishing (`push: false`). Scan images with Trivy (`aquasecurity/trivy-action@0.28.0`) failing on High/Critical vulnerabilities with fixes. Run end-to-end Docker Compose smoke test checking `/ready`, complaint creation, category persistence, and stats `X-Cache` MISS to HIT transition. Create submission verification script `scripts/check_submission.py`. Produce audit evidence in `docs/evidence/CI-PIPELINE-EVIDENCE.md`.
+- **Output used:** `.github/workflows/ci.yml`, `scripts/check_submission.py`, `overlays/prod/kustomization.yaml`, `k8s/base/kustomization.yaml`, `k8s/overlays/prod/kustomization.yaml`, `docs/evidence/CI-PIPELINE-EVIDENCE.md`, `docs/ENGINEERING-NOTES.md`, and `docs/AI-USAGE.md`.
+- **Human review:** Executed frontend linting and Vitest tests (15 passed across 6 test suites). Executed backend Pytest with coverage (98 passed, 1 skipped, 89% total coverage). Executed Ruff formatting (57 files clean) and MyPy type checks (0 errors across 39 modules). Verified `scripts/check_submission.py` passes all 7 mechanical pre-submission checks. Verified `kubectl kustomize overlays/prod` builds cleanly.
+
 ### 2026-09-28 — Phase 11: Security Hardening, Capabilities Dropping, NetworkPolicies, and Security Audit (Both)
 
 - **Tool:** Google Antigravity (Gemini)
