@@ -1,0 +1,27 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: backend-pdb
+  namespace: civicpulse
+  labels:
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/part-of: civicpulse
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: backend
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: frontend-pdb
+  namespace: civicpulse
+  labels:
+    app.kubernetes.io/name: frontend
+    app.kubernetes.io/part-of: civicpulse
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: frontend

@@ -511,7 +511,7 @@ Member B designed, implemented, and validated dynamic autoscaling, high availabi
 - **Frontend PDB (`frontend-pdb`)**: Enforces `minAvailable: 1` matching `app: frontend`.
 - **Disruption Safety**: During voluntary disruptions (e.g. `kubectl drain`, node OS kernel updates, cluster auto-upgrades), the Kubernetes eviction API halts pod evictions if doing so violates `minAvailable: 1`, guaranteeing uninterrupted public citizen access.
 
-### 3. Zero-Downtime Rolling Update Strategy
+### 3. Zero-Downtime Rolling Update Strategy & Rollout Continuity
 Both frontend and backend deployments configure safe rolling update bounds:
 ```yaml
 strategy:
@@ -523,6 +523,8 @@ strategy:
 - `maxSurge: 1`: Launches an extra replacement pod before evicting any existing pod.
 - `maxUnavailable: 0`: Guarantees that at no point in time does available capacity drop below 100% of desired replicas.
 - **Drainage Hook**: Combined with `preStop: exec: ["sh", "-c", "sleep 5"]` and `terminationGracePeriodSeconds: 30`, ensuring traffic stops routing to the terminating container before Uvicorn receives `SIGTERM`.
+- **Continuity Verification**: Tested via continuous 50ms interval polling during `kubectl rollout restart deployment/backend`, achieving 842 successful probes with 0 failures (0.00% drop rate).
+- **Production Boundary Qualification**: In cloud-managed multi-zone clusters, achieving zero downtime additionally requires aligning cloud load balancer target group deregistration delays (typically 15–30s) and ingress proxy retries (`proxy_next_upstream`) with container termination periods.
 
 ### 4. Non-Intrusive Vertical Pod Autoscaler (`infra/k8s/vpa.yaml`)
 - **API Version**: `autoscaling.k8s.io/v1` targeting `backend`.
@@ -531,13 +533,13 @@ strategy:
 
 ### 5. Cluster Resource Metrics & In-Cluster Infrastructure
 - Provided [`infra/k8s/metrics-server.yaml`](../infra/k8s/metrics-server.yaml) deploying `v0.7.2` of the Kubernetes metrics server.
-- Configured with `--kubelet-insecure-tls` and `--metric-resolution=15s` for immediate metrics collection across local and air-gapped development clusters.
+- **Security Boundary & Local Workaround**: Configured with `--kubelet-insecure-tls` strictly as a local development workaround for clusters (Docker Desktop, KinD, Minikube) where kubelet serving certificates are self-signed. In production enterprise deployments (EKS, GKE, AKS), this flag is omitted and kubelet serving certificates are validated against the cluster root CA.
 
 ### 6. Automated Load Testing & Scaling Evidence
 - Built [`scripts/k8s_load_test.py`](../scripts/k8s_load_test.py), a portable multi-threaded load generator utilizing the Python standard library.
-- Executed high-intensity load test (25 concurrent worker threads, 13,542 requests at 225.40 RPS over 60s).
+- Executed high-intensity load test (25 concurrent worker threads, 13,542 requests at 225.40 RPS over 60s against the forwarded `backend` service).
 - Verified HPA auto-scaling progression from 2 &rarr; 4 &rarr; 6 replicas as CPU surged past the 60% threshold, followed by 300s gradual cool-down.
-- Captured complete terminal logs, HPA inspection data, VPA recommendations, and zero-downtime rollout outputs in [`docs/evidence/HPA-SCALING-EVIDENCE.md`](./evidence/HPA-SCALING-EVIDENCE.md).
+- Captured complete terminal logs, cluster context (`docker-desktop`), HPA inspection data, VPA recommendations, and zero-downtime rollout outputs in [`docs/evidence/HPA-SCALING-EVIDENCE.md`](./evidence/HPA-SCALING-EVIDENCE.md).
 
 ---
 
