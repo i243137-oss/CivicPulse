@@ -23,6 +23,7 @@ from app.schemas.complaint import ComplaintCreate, ComplaintStatusUpdate
 # 1. Pydantic Model Unit Validation Tests
 # ==============================================================================
 
+
 def test_complaint_create_text_length_boundaries() -> None:
     """Validate complaint description length boundaries (10 to 2000 chars)."""
     # 9 chars -> Fails (too short)
@@ -68,48 +69,60 @@ def test_complaint_create_location_length_boundaries() -> None:
 def test_complaint_create_reporter_contact_boundaries() -> None:
     """Validate optional reporter_contact max length constraint (255 chars)."""
     # None -> Passes
-    c1 = ComplaintCreate(text="Valid complaint text", location="Valid Location", reporter_contact=None)
+    c1 = ComplaintCreate(
+        text="Valid complaint text", location="Valid Location", reporter_contact=None
+    )
     assert c1.reporter_contact is None
 
     # 255 chars -> Passes
-    c2 = ComplaintCreate(text="Valid complaint text", location="Valid Location", reporter_contact="c" * 255)
+    c2 = ComplaintCreate(
+        text="Valid complaint text", location="Valid Location", reporter_contact="c" * 255
+    )
     assert c2.reporter_contact is not None
     assert len(c2.reporter_contact) == 255
 
     # 256 chars -> Fails
     with pytest.raises(ValidationError) as exc:
-        ComplaintCreate(text="Valid complaint text", location="Valid Location", reporter_contact="c" * 256)
+        ComplaintCreate(
+            text="Valid complaint text", location="Valid Location", reporter_contact="c" * 256
+        )
     assert "reporter_contact" in str(exc.value)
 
 
 def test_complaint_create_enum_validation() -> None:
     """Validate category and priority enums in ComplaintCreate."""
     # Valid enum strings
-    c = ComplaintCreate.model_validate({
-        "text": "Valid complaint text",
-        "location": "Valid Location",
-        "category": "water",
-        "priority": "high",
-    })
+    c = ComplaintCreate.model_validate(
+        {
+            "text": "Valid complaint text",
+            "location": "Valid Location",
+            "category": "water",
+            "priority": "high",
+        }
+    )
     assert c.category == CategoryEnum.WATER
     assert c.priority == PriorityEnum.HIGH
 
     # Invalid category
     with pytest.raises(ValidationError) as exc:
-        ComplaintCreate.model_validate({
-            "text": "Valid complaint text",
-            "location": "Valid Location",
-            "category": "astronomy",
-        })
+        ComplaintCreate.model_validate(
+            {
+                "text": "Valid complaint text",
+                "location": "Valid Location",
+                "category": "astronomy",
+            }
+        )
     assert "category" in str(exc.value)
 
     # Invalid priority
     with pytest.raises(ValidationError) as exc:
-        ComplaintCreate.model_validate({
-            "text": "Valid complaint text",
-            "location": "Valid Location",
-            "priority": "ultra_emergency",
-        })
+        ComplaintCreate.model_validate(
+            {
+                "text": "Valid complaint text",
+                "location": "Valid Location",
+                "priority": "ultra_emergency",
+            }
+        )
     assert "priority" in str(exc.value)
 
 
@@ -129,55 +142,65 @@ def test_complaint_status_update_validation() -> None:
 def test_triage_result_schema_normalization_and_constraints() -> None:
     """Validate TriageResult normalization, confidence bounds, and summary truncation."""
     # Normalization of 'critical' -> 'high' and 'medium' -> 'normal'
-    t1 = TriageResult.model_validate({
-        "category": "roads",
-        "priority": "critical",
-        "summary": "Collapsed road bridge",
-        "confidence": 0.95,
-    })
+    t1 = TriageResult.model_validate(
+        {
+            "category": "roads",
+            "priority": "critical",
+            "summary": "Collapsed road bridge",
+            "confidence": 0.95,
+        }
+    )
     assert t1.priority == PriorityEnum.HIGH
 
-    t2 = TriageResult.model_validate({
-        "category": "sanitation",
-        "priority": "medium",
-        "summary": "Overflowing dumpster",
-        "confidence": 0.85,
-    })
+    t2 = TriageResult.model_validate(
+        {
+            "category": "sanitation",
+            "priority": "medium",
+            "summary": "Overflowing dumpster",
+            "confidence": 0.85,
+        }
+    )
     assert t2.priority == PriorityEnum.NORMAL
 
     # Oversized summary automatically truncated with ellipsis to 140 chars
     long_summary = "X" * 150
-    t3 = TriageResult.model_validate({
-        "category": "water",
-        "priority": "low",
-        "summary": long_summary,
-        "confidence": 0.5,
-    })
+    t3 = TriageResult.model_validate(
+        {
+            "category": "water",
+            "priority": "low",
+            "summary": long_summary,
+            "confidence": 0.5,
+        }
+    )
     assert len(t3.summary) == 140
     assert t3.summary.endswith("...")
 
     # Confidence must be between 0.0 and 1.0
     with pytest.raises(ValidationError):
-        TriageResult.model_validate({
-            "category": "water",
-            "priority": "low",
-            "summary": "Valid summary",
-            "confidence": 1.5,
-        })
+        TriageResult.model_validate(
+            {
+                "category": "water",
+                "priority": "low",
+                "summary": "Valid summary",
+                "confidence": 1.5,
+            }
+        )
 
     with pytest.raises(ValidationError):
-        TriageResult.model_validate({
-            "category": "water",
-            "priority": "low",
-            "summary": "Valid summary",
-            "confidence": -0.1,
-        })
-
+        TriageResult.model_validate(
+            {
+                "category": "water",
+                "priority": "low",
+                "summary": "Valid summary",
+                "confidence": -0.1,
+            }
+        )
 
 
 # ==============================================================================
 # 2. HTTP Route Parameter & Body Validation (Integration)
 # ==============================================================================
+
 
 def test_api_create_complaint_missing_required_fields(client: TestClient) -> None:
     """POST /api/complaints returns 422 Unprocessable Entity when required fields are missing."""
@@ -264,6 +287,7 @@ def test_api_update_complaint_status_malformed_uuid_and_payload(client: TestClie
 # 3. Application Security & CORS Validation Tests (Phase 11)
 # ==============================================================================
 
+
 def test_cors_wildcard_with_credentials_rejected() -> None:
     """Settings rejects wildcard CORS origins when allow_credentials is True."""
     from app.core.config import Settings
@@ -295,4 +319,3 @@ def test_cors_comma_separated_origins_parsed() -> None:
         CORS_ALLOW_CREDENTIALS=True,
     )
     assert s.CORS_ORIGINS == ["http://frontend.local", "http://dashboard.local"]
-

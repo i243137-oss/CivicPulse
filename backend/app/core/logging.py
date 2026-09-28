@@ -127,7 +127,11 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         # Extract existing X-Request-ID or generate a new correlated identifier
         incoming_id = request.headers.get("X-Request-ID")
-        req_id = incoming_id.strip() if incoming_id and incoming_id.strip() else f"req-{uuid.uuid4().hex[:12]}"
+        req_id = (
+            incoming_id.strip()
+            if incoming_id and incoming_id.strip()
+            else f"req-{uuid.uuid4().hex[:12]}"
+        )
 
         # Propagate into contextvar and request state
         token = request_id_ctx.set(req_id)
@@ -152,8 +156,13 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
             duration_ms = round(duration_sec * 1000, 2)
             try:
                 from app.core.metrics import HTTP_REQUEST_DURATION_SECONDS, HTTP_REQUESTS_TOTAL
-                HTTP_REQUESTS_TOTAL.labels(method=request.method, endpoint=request.url.path, status="500").inc()
-                HTTP_REQUEST_DURATION_SECONDS.labels(method=request.method, endpoint=request.url.path).observe(duration_sec)
+
+                HTTP_REQUESTS_TOTAL.labels(
+                    method=request.method, endpoint=request.url.path, status="500"
+                ).inc()
+                HTTP_REQUEST_DURATION_SECONDS.labels(
+                    method=request.method, endpoint=request.url.path
+                ).observe(duration_sec)
             except Exception:
                 pass
 
@@ -175,6 +184,7 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
 
         try:
             from app.core.metrics import HTTP_REQUEST_DURATION_SECONDS, HTTP_REQUESTS_TOTAL
+
             HTTP_REQUESTS_TOTAL.labels(
                 method=request.method,
                 endpoint=request.url.path,

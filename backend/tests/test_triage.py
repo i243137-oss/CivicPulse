@@ -45,6 +45,7 @@ from app.services.triage_service import TriageService
 # 1. TriageResult Schema Tests
 # ==============================================================================
 
+
 def test_triage_result_schema_valid() -> None:
     """Valid payload creates TriageResult correctly."""
     result = TriageResult(
@@ -97,6 +98,7 @@ def test_triage_result_truncates_oversized_summary() -> None:
 # 2. RuleBasedTriage Provider Tests
 # ==============================================================================
 
+
 @pytest.mark.asyncio
 async def test_rule_based_triage_domains() -> None:
     """RuleBasedTriage correctly identifies key municipal domains."""
@@ -132,6 +134,7 @@ async def test_rule_based_triage_domains() -> None:
 # ==============================================================================
 # 3. SimulatedTriage Provider & Failure Injection Tests
 # ==============================================================================
+
 
 @pytest.mark.asyncio
 async def test_simulated_triage_deterministic_and_injection() -> None:
@@ -173,6 +176,7 @@ async def test_simulated_triage_deterministic_and_injection() -> None:
 # 4. LLMTriage Provider Tests (Timeout, Retry, and Error Handling)
 # ==============================================================================
 
+
 @pytest.mark.asyncio
 async def test_llm_triage_success_with_mock() -> None:
     """LLMTriage parses valid JSON response from OpenAI-compatible endpoint."""
@@ -203,7 +207,11 @@ async def test_llm_triage_retries_on_timeout() -> None:
     """LLMTriage performs 1 retry on timeout, then raises TriageTimeoutError."""
     llm = LLMTriage(api_key="mock-key", timeout_seconds=1.0)
 
-    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, side_effect=httpx.TimeoutException("Timeout")):
+    with patch(
+        "httpx.AsyncClient.post",
+        new_callable=AsyncMock,
+        side_effect=httpx.TimeoutException("Timeout"),
+    ):
         with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
             with pytest.raises(TriageTimeoutError):
                 await llm.triage("Issue description", "Location")
@@ -244,7 +252,11 @@ async def test_llm_triage_never_retries_connection_error() -> None:
     """LLMTriage never retries connection errors (only timeout, 429, 5xx are eligible)."""
     llm = LLMTriage(api_key="mock-key")
 
-    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, side_effect=httpx.ConnectError("Connection refused")):
+    with patch(
+        "httpx.AsyncClient.post",
+        new_callable=AsyncMock,
+        side_effect=httpx.ConnectError("Connection refused"),
+    ):
         with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
             with pytest.raises(httpx.ConnectError):
                 await llm.triage("Issue", "Location")
@@ -266,7 +278,11 @@ async def test_ollama_triage_retries_only_timeout_429_5xx() -> None:
     ollama = OllamaTriage()
 
     # 1. Timeout -> retried
-    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, side_effect=httpx.TimeoutException("Timeout")):
+    with patch(
+        "httpx.AsyncClient.post",
+        new_callable=AsyncMock,
+        side_effect=httpx.TimeoutException("Timeout"),
+    ):
         with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
             with pytest.raises(TriageTimeoutError):
                 await ollama.triage("Issue", "Location")
@@ -289,7 +305,9 @@ async def test_ollama_triage_retries_only_timeout_429_5xx() -> None:
             assert mock_sleep.call_count == 1
 
     # 4. Connection error -> NEVER retried
-    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, side_effect=httpx.ConnectError("Refused")):
+    with patch(
+        "httpx.AsyncClient.post", new_callable=AsyncMock, side_effect=httpx.ConnectError("Refused")
+    ):
         with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
             with pytest.raises(httpx.ConnectError):
                 await ollama.triage("Issue", "Location")
@@ -299,6 +317,7 @@ async def test_ollama_triage_retries_only_timeout_429_5xx() -> None:
 # ==============================================================================
 # 5. OllamaTriage Provider Tests
 # ==============================================================================
+
 
 @pytest.mark.asyncio
 async def test_ollama_triage_success_and_offline_support() -> None:
@@ -323,6 +342,7 @@ async def test_ollama_triage_success_and_offline_support() -> None:
 # ==============================================================================
 # 6. Structured Output Validation & Guardrails
 # ==============================================================================
+
 
 def test_guardrails_extract_markdown_fence() -> None:
     """extract_and_validate_triage_json parses JSON inside markdown code fences."""
@@ -362,6 +382,7 @@ def test_prompt_injection_isolation() -> None:
 # 7. Fallback Chain & TriageService Tests
 # ==============================================================================
 
+
 @pytest.mark.asyncio
 async def test_fallback_chain_on_primary_ai_failure() -> None:
     """When primary provider fails, TriageService falls back to rules and records 'rules:fallback'."""
@@ -385,6 +406,7 @@ async def test_fallback_chain_on_primary_ai_failure() -> None:
 # ==============================================================================
 # 8. Content-Hash Caching Tests (24h TTL)
 # ==============================================================================
+
 
 @pytest.mark.asyncio
 async def test_content_hash_caching_eliminates_duplicate_inference() -> None:
@@ -425,10 +447,10 @@ async def test_content_hash_caching_eliminates_duplicate_inference() -> None:
     await fake_redis_client.aclose()
 
 
-
 # ==============================================================================
 # 9. Provider Factory Test
 # ==============================================================================
+
 
 def test_create_triage_provider_factory(monkeypatch: pytest.MonkeyPatch) -> None:
     """create_triage_provider correctly instantiates each provider type."""
@@ -457,6 +479,7 @@ def test_create_triage_provider_factory(monkeypatch: pytest.MonkeyPatch) -> None
 # 10. Phase 4 Exit Gate: End-to-End Fallback on API POST /api/complaints
 # ==============================================================================
 
+
 def test_exit_gate_complaint_submission_falls_back_safely_when_ai_crashes(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -473,6 +496,7 @@ def test_exit_gate_complaint_submission_falls_back_safely_when_ai_crashes(
     failing_service = TriageService(primary_provider=failing_provider)
 
     from app.main import app
+
     app.dependency_overrides[get_triage_service] = lambda: failing_service
 
     try:
@@ -556,4 +580,3 @@ def test_meta_providers_reports_cache_hit_rate(client: TestClient) -> None:
     assert reported_metrics["misses"] >= 1
     assert reported_metrics["total_requests"] >= 2
     assert 0.0 < reported_metrics["hit_rate"] <= 1.0
-

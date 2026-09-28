@@ -140,20 +140,20 @@ Harden container runtimes and Kubernetes configurations according to the princip
 Create a robust, gated Continuous Integration workflow (`.github/workflows/ci.yml`) triggered on pull requests to `main` and pushes to `dev`, ensuring no untested or unlinted code can be merged.
 
 **Scope (Member B)**:
-- [ ] Create `.github/workflows/ci.yml` with strict job dependencies (`needs: [...]`).
-- [ ] Job 1: `backend-lint`: Ruff linting, formatting, and MyPy static type checking.
-- [ ] Job 2: `backend-test`: Pytest with SQLite/mock redis, enforcing $\ge 65\%$ code coverage (`TRIAGE_PROVIDER=simulated`).
-- [ ] Job 3: `frontend-lint`: ESLint (`--max-warnings 0`) and TypeScript build verification (`tsc --noEmit`).
-- [ ] Job 4: `frontend-test`: Vitest component and integration testing suite.
-- [ ] Job 5: `k8s-validate`: Validate all Kubernetes manifests against schema with `kubeconform`.
-- [ ] Job 6: `security-scan`: Run Trivy container and filesystem vulnerability scan.
-- [ ] Job 7: `ci-gate`: Aggregate gate job requiring all prerequisite jobs to succeed.
-- [ ] Configure least-privilege `permissions:` block in the workflow.
+- [x] Create `.github/workflows/ci.yml` with strict job dependencies (`needs: [...]`).
+- [x] Job 1: `backend-lint`: Ruff linting, formatting, and MyPy static type checking.
+- [x] Job 2: `backend-test`: Pytest with SQLite/mock redis, enforcing $\ge 65\%$ code coverage (`TRIAGE_PROVIDER=simulated`).
+- [x] Job 3: `frontend-lint`: ESLint (`--max-warnings 0`) and TypeScript build verification (`tsc --noEmit`).
+- [x] Job 4: `frontend-test`: Vitest component and integration testing suite.
+- [x] Job 5: `k8s-validate`: Validate all Kubernetes manifests against schema with `kubeconform`.
+- [x] Job 6: `security-scan`: Run Trivy container and filesystem vulnerability scan.
+- [x] Job 7: `ci-gate`: Aggregate gate job requiring all prerequisite jobs to succeed.
+- [x] Configure least-privilege `permissions:` block in the workflow.
 
 #### Exit Gate
-- Pull requests run all 7 jobs in parallel/dependency order.
-- A simulated failing test or lint error blocks the merge gate.
-- Clean PRs receive a 100% green checkmark.
+- [x] Pull requests run all 7 jobs in parallel/dependency order.
+- [x] A simulated failing test or lint error blocks the merge gate.
+- [x] Clean PRs receive a 100% green checkmark.
 
 ---
 

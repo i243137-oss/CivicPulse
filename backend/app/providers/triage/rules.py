@@ -24,24 +24,101 @@ class RuleBasedTriage:
         lower = text.lower()
 
         # Category heuristics
-        if any(w in lower for w in ["water", "pani", "pipe", "burst main", "leak", "tanker", "flooding", "water supply"]):
+        if any(
+            w in lower
+            for w in [
+                "water",
+                "pani",
+                "pipe",
+                "burst main",
+                "leak",
+                "tanker",
+                "flooding",
+                "water supply",
+            ]
+        ):
             category = CategoryEnum.WATER
-        elif any(w in lower for w in ["bijli", "electricity", "transformer", "spark", "current", "wire", "voltage", "power outage", "short circuit"]):
+        elif any(
+            w in lower
+            for w in [
+                "bijli",
+                "electricity",
+                "transformer",
+                "spark",
+                "current",
+                "wire",
+                "voltage",
+                "power outage",
+                "short circuit",
+            ]
+        ):
             category = CategoryEnum.ELECTRICITY
-        elif any(w in lower for w in ["kachra", "garbage", "waste", "trash", "sanitation", "filth", "dump", "sewer", "gutter", "drain"]):
+        elif any(
+            w in lower
+            for w in [
+                "kachra",
+                "garbage",
+                "waste",
+                "trash",
+                "sanitation",
+                "filth",
+                "dump",
+                "sewer",
+                "gutter",
+                "drain",
+            ]
+        ):
             category = CategoryEnum.SANITATION
-        elif any(w in lower for w in ["road", "pothole", "gaddha", "asphalt", "crater", "broken road", "manhole cover"]):
+        elif any(
+            w in lower
+            for w in [
+                "road",
+                "pothole",
+                "gaddha",
+                "asphalt",
+                "crater",
+                "broken road",
+                "manhole cover",
+            ]
+        ):
             category = CategoryEnum.ROADS
-        elif any(w in lower for w in ["streetlight", "street light", "light", "lamp", "andhera", "dark street", "pole light"]):
+        elif any(
+            w in lower
+            for w in [
+                "streetlight",
+                "street light",
+                "light",
+                "lamp",
+                "andhera",
+                "dark street",
+                "pole light",
+            ]
+        ):
             category = CategoryEnum.STREETLIGHTS
         else:
             category = CategoryEnum.OTHER
 
         # Priority heuristics
-        if any(w in lower for w in [
-            "electrocution", "fire hazard", "gas leak", "life threatening", "severe injury",
-            "urgent", "danger", "burst", "hazard", "spark", "sparking", "surge", "emergency", "flooding", "outage"
-        ]):
+        if any(
+            w in lower
+            for w in [
+                "electrocution",
+                "fire hazard",
+                "gas leak",
+                "life threatening",
+                "severe injury",
+                "urgent",
+                "danger",
+                "burst",
+                "hazard",
+                "spark",
+                "sparking",
+                "surge",
+                "emergency",
+                "flooding",
+                "outage",
+            ]
+        ):
             priority = PriorityEnum.HIGH
         elif any(w in lower for w in ["minor", "cosmetic", "suggestion", "delay"]):
             priority = PriorityEnum.LOW

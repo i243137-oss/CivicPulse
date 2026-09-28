@@ -574,6 +574,38 @@ Implemented comprehensive defense-in-depth security hardening across container r
 
 ---
 
+## Phase 12 — Continuous Integration Pipeline (Member B)
+
+Member B architected and implemented the GitHub Actions Continuous Integration pipeline (`.github/workflows/ci.yml`), establishing strict automated quality gates for pull requests and development branch commits:
+
+### 1. Workflow Architecture & Triggers
+- **Triggers**: Configured to run on `push: branches: [dev]` and `pull_request: branches: [main, dev]`.
+- **Least-Privilege Security**: Root-level `permissions: contents: read` restricts GitHub Actions tokens from unauthorized modifications.
+- **Zero Artifact Publishing**: Image build step operates with `push: false`. Release publishing is strictly reserved for Phase 13 CD.
+
+### 2. Job Dependency Gating (`needs: [...]`)
+The workflow enforces a directed acyclic graph (DAG) across 8 distinct jobs:
+1. `lint-and-type`: Executes Ruff linting (`ruff check`), Ruff format verification (`ruff format --check`), MyPy static type checking (`mypy --config-file backend/pyproject.toml backend/app`), ESLint (`--max-warnings 0`), and TypeScript compiler validation (`tsc --noEmit`).
+2. `test-backend`: Depends on `lint-and-type`. Runs Pytest with live PostgreSQL 16 and Redis 7 service containers, enforcing code coverage $\ge 65\%$ (`--cov-fail-under=65`) under deterministic `TRIAGE_PROVIDER=simulated`.
+3. `test-frontend`: Depends on `lint-and-type`. Executes the full 15-test Vitest suite covering UI components and integration flows.
+4. `manifests`: Depends on `lint-and-type`. Uses `kubeconform` (v0.6.7) to validate Kustomize-rendered production manifests against Kubernetes 1.30 schemas.
+5. `build`: Depends on `test-backend` and `test-frontend`. Builds `civicpulse-backend:ci` and `civicpulse-frontend:ci` via Docker Buildx and exports them as workflow artifacts.
+6. `scan`: Depends on `build`. Executes container vulnerability scanning with `aquasecurity/trivy-action@0.28.0`, gating on `CRITICAL,HIGH` vulnerabilities with `--ignore-unfixed`.
+7. `integration`: Depends on `build`. Spins up the stack via `docker compose up -d --build`, polls `/ready` until healthy, submits a complaint, asserts category persistence, and verifies `X-Cache` transitions from `MISS` to `HIT` before tearing down with `docker compose down -v`.
+8. `ci-gate`: Aggregate status evaluator requiring all 7 prerequisite jobs to report `success`. Fails with exit code 1 if any upstream job fails.
+
+### 3. Submission Verification Script (`scripts/check_submission.py`)
+- Automated linting script enforcing the non-negotiables of Section 5.3:
+  - Zero committed `.env` files.
+  - Zero `:latest` image tags.
+  - Zero `localhost` service-to-service communication.
+  - No database or cache ports published in `compose.prod.yaml`.
+  - PostgreSQL configured as StatefulSet with volumeClaimTemplates.
+  - Complete CI job and dependency gate validation.
+  - Secret placeholder verification.
+
+---
+
 ## Lessons Learned
 
 1. **Structured Output Enforcement in Production**: Free-tier LLMs occasionally wrap JSON in explanatory text or markdown code fences (`json ... `). Robust regex extraction combined with Pydantic model validation prevents runtime crashes and ensures enum compliance.
@@ -582,6 +614,8 @@ Implemented comprehensive defense-in-depth security hardening across container r
 4. **StatefulSet vs Deployment for Databases**: Using a Deployment for a database causes split-brain risks and mount conflicts upon rescheduling because Deployments assume stateless, interchangeable pods. StatefulSet guarantees ordered deployment, stable network identities, and dedicated persistent volumes per ordinal replica.
 5. **HPA and VPA Control Loop Decoupling**: Combining HPA (horizontal scaling) and VPA (vertical scaling) on the same resource metric (CPU) creates antagonistic control loops. Keeping VPA in `updateMode: "Off"` allows non-intrusive baseline recommendation gathering while empowering HPA to dynamically manage traffic spikes.
 6. **Container Read-Only Filesystem Isolation**: Enforcing `readOnlyRootFilesystem: true` blocks attackers from downloading or writing executable payloads in the container. However, runtimes require careful emptyDir provisioning for transient sockets and caches (`/tmp`, `/var/run`, `/var/cache/nginx`) and disabling bytecode writes (`PYTHONDONTWRITEBYTECODE=1`).
+7. **Strict CI Dependency Gating (`needs`)**: Running builds and integration tests on code that fails basic linting or unit tests wastes expensive compute minutes and obscures root causes. Designing a tiered dependency DAG ensures failures fail fast at the earliest static analysis rung, protecting downstream runners.
+
 
 
 

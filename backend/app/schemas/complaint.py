@@ -18,7 +18,9 @@ class ComplaintCreate(BaseModel):
         min_length=10,
         max_length=2000,
         description="Detailed description of the issue (10–2000 characters).",
-        examples=["Water pipeline broke near Street 12, clean water flooding the street since morning."],
+        examples=[
+            "Water pipeline broke near Street 12, clean water flooding the street since morning."
+        ],
     )
     location: str = Field(
         ...,

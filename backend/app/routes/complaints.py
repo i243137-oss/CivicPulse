@@ -81,7 +81,9 @@ async def get_complaint(
 async def list_complaints(
     category: CategoryEnum | None = Query(None, description="Filter by category"),
     priority: PriorityEnum | None = Query(None, description="Filter by priority"),
-    complaint_status: StatusEnum | None = Query(None, alias="status", description="Filter by status"),
+    complaint_status: StatusEnum | None = Query(
+        None, alias="status", description="Filter by status"
+    ),
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page (max 100)"),
     service: ComplaintService = Depends(get_complaint_service),

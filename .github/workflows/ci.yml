@@ -1,0 +1,349 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - dev
+  pull_request:
+    branches:
+      - main
+      - dev
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-type:
+    name: Lint & Static Type Checking
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Backend Dependencies & Linters
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff mypy
+          pip install -e "backend/[dev]"
+
+      - name: Run Ruff Lint Check
+        run: |
+          ruff check backend/app backend/tests
+
+      - name: Run Ruff Format Check
+        run: |
+          ruff format --check backend/app backend/tests
+
+      - name: Run MyPy Static Type Check
+        run: |
+          mypy --config-file backend/pyproject.toml backend/app
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        working-directory: ./frontend
+        run: |
+          npm ci
+
+      - name: Run Frontend ESLint
+        working-directory: ./frontend
+        run: |
+          npm run lint
+
+      - name: Run Frontend TypeScript Check
+        working-directory: ./frontend
+        run: |
+          npx tsc --noEmit
+
+  test-backend:
+    name: Backend Tests & Coverage
+    runs-on: ubuntu-latest
+    needs: [lint-and-type]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: civicpulse_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Backend Test Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e "backend/[dev]"
+
+      - name: Run Pytest with Coverage Gate (>= 65%)
+        env:
+          TRIAGE_PROVIDER: simulated
+          ENVIRONMENT: testing
+          POSTGRES_DB: civicpulse_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres_test_password
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+        run: |
+          pytest backend/tests --cov=backend/app --cov-report=term-missing --cov-report=xml --cov-fail-under=65
+
+  test-frontend:
+    name: Frontend Unit & Component Tests
+    runs-on: ubuntu-latest
+    needs: [lint-and-type]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        working-directory: ./frontend
+        run: |
+          npm ci
+
+      - name: Run Vitest Suite (>= 5 meaningful tests)
+        working-directory: ./frontend
+        run: |
+          npm run test
+
+  manifests:
+    name: Kubernetes Manifest Validation (kubeconform)
+    runs-on: ubuntu-latest
+    needs: [lint-and-type]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Kubeconform
+        run: |
+          KUBECONFORM_VERSION="v0.6.7"
+          curl -sL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" | tar xz
+          sudo mv kubeconform /usr/local/bin/
+          kubeconform -v
+
+      - name: Validate Rendered Manifests with Kubeconform
+        run: |
+          kubectl kustomize overlays/prod | kubeconform \
+            -summary \
+            -strict \
+            -ignore-missing-schemas \
+            -kubernetes-version 1.30.0
+
+  build:
+    name: Build Container Images (No Push)
+    runs-on: ubuntu-latest
+    needs: [test-backend, test-frontend]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Backend Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: false
+          tags: civicpulse-backend:ci
+          outputs: type=docker,dest=/tmp/backend-image.tar
+
+      - name: Build Frontend Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: false
+          tags: civicpulse-frontend:ci
+          outputs: type=docker,dest=/tmp/frontend-image.tar
+
+      - name: Upload Docker Images Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-images
+          path: /tmp/*-image.tar
+          retention-days: 1
+
+  scan:
+    name: Container Security Scanning (Trivy)
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download Docker Images Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-images
+          path: /tmp
+
+      - name: Load Docker Images
+        run: |
+          docker load -i /tmp/backend-image.tar
+          docker load -i /tmp/frontend-image.tar
+          docker image ls
+
+      - name: Run Trivy Vulnerability Scan on Backend Image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: civicpulse-backend:ci
+          format: table
+          exit-code: 1
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+
+      - name: Run Trivy Vulnerability Scan on Frontend Image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: civicpulse-frontend:ci
+          format: table
+          exit-code: 1
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+
+  integration:
+    name: Compose Integration Smoke Test
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure Environment File
+        run: |
+          cp .env.example .env
+          sed -i 's/TRIAGE_PROVIDER=.*$/TRIAGE_PROVIDER=simulated/' .env
+
+      - name: Start Docker Compose Stack
+        run: |
+          docker compose up -d --build
+
+      - name: Wait for /ready Endpoint
+        run: |
+          echo "Waiting for services to become healthy..."
+          timeout 120 bash -c 'until curl -sf http://localhost:8000/ready; do echo "Waiting for backend /ready..."; sleep 3; done'
+          echo "CivicPulse backend is ready!"
+
+      - name: Test End-to-End Complaint Path & Cache
+        run: |
+          echo "== 1. POST a complaint =="
+          RESPONSE=$(curl -sf -X POST http://localhost:8000/api/complaints \
+            -H "Content-Type: application/json" \
+            -d '{"text": "Severe water main burst flooding street 12 near market", "location": "Street 12 Market", "reporter_contact": "citizen@example.com"}')
+          echo "Response: $RESPONSE"
+
+          COMPLAINT_ID=$(echo "$RESPONSE" | jq -r '.id')
+          CATEGORY=$(echo "$RESPONSE" | jq -r '.category')
+
+          if [ -z "$COMPLAINT_ID" ] || [ "$COMPLAINT_ID" = "null" ]; then
+            echo "Error: complaint ID missing"
+            exit 1
+          fi
+          echo "Complaint ID: $COMPLAINT_ID, Category: $CATEGORY"
+
+          echo "== 2. GET the complaint back =="
+          FETCHED=$(curl -sf http://localhost:8000/api/complaints/$COMPLAINT_ID)
+          echo "Fetched: $FETCHED"
+          FETCHED_CAT=$(echo "$FETCHED" | jq -r '.category')
+
+          if [ "$FETCHED_CAT" != "$CATEGORY" ]; then
+            echo "Category mismatch: expected $CATEGORY, got $FETCHED_CAT"
+            exit 1
+          fi
+
+          echo "== 3. Check X-Cache goes MISS -> HIT on /api/stats =="
+          HEADER1=$(curl -si http://localhost:8000/api/stats | grep -i "x-cache:" || true)
+          echo "Request 1 Header: $HEADER1"
+
+          HEADER2=$(curl -si http://localhost:8000/api/stats | grep -i "x-cache:" || true)
+          echo "Request 2 Header: $HEADER2"
+
+          if ! echo "$HEADER2" | grep -iq "HIT"; then
+            echo "Expected X-Cache: HIT on second stats request"
+            exit 1
+          fi
+          echo "Cache HIT verified successfully!"
+
+      - name: Teardown Docker Compose Stack
+        if: always()
+        run: |
+          docker compose down -v
+
+  ci-gate:
+    name: CI Pipeline Status Gate
+    runs-on: ubuntu-latest
+    needs:
+      - lint-and-type
+      - test-backend
+      - test-frontend
+      - manifests
+      - build
+      - scan
+      - integration
+    if: always()
+    steps:
+      - name: Check Status of All Prerequisite Jobs
+        run: |
+          echo "Evaluating CI Pipeline Results..."
+          echo "lint-and-type: ${{ needs.lint-and-type.result }}"
+          echo "test-backend:  ${{ needs.test-backend.result }}"
+          echo "test-frontend: ${{ needs.test-frontend.result }}"
+          echo "manifests:     ${{ needs.manifests.result }}"
+          echo "build:         ${{ needs.build.result }}"
+          echo "scan:          ${{ needs.scan.result }}"
+          echo "integration:   ${{ needs.integration.result }}"
+
+          if [ "${{ needs.lint-and-type.result }}" != "success" ] || \
+             [ "${{ needs.test-backend.result }}" != "success" ] || \
+             [ "${{ needs.test-frontend.result }}" != "success" ] || \
+             [ "${{ needs.manifests.result }}" != "success" ] || \
+             [ "${{ needs.build.result }}" != "success" ] || \
+             [ "${{ needs.scan.result }}" != "success" ] || \
+             [ "${{ needs.integration.result }}" != "success" ]; then
+            echo "One or more required CI checks failed. Blocking pipeline."
+            exit 1
+          fi
+          echo "All checks passed! Continuous Integration Gate is GREEN."

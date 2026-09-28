@@ -61,7 +61,6 @@ class Settings(BaseSettings):
             )
         return self
 
-
     # --- API ----------------------------------------------------------------
     API_V1_PREFIX: str = "/api"
 

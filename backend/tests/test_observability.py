@@ -29,6 +29,7 @@ from app.main import app, lifespan
 # 1. JSON Structured Logging Tests
 # ==============================================================================
 
+
 def test_structured_json_formatter_emits_valid_json() -> None:
     """Verify StructuredJsonFormatter outputs valid single-line JSON with standard fields."""
     formatter = StructuredJsonFormatter()
@@ -86,6 +87,7 @@ def test_structured_json_formatter_propagates_request_id() -> None:
 # 2. Request ID Middleware & Propagation Tests
 # ==============================================================================
 
+
 def test_request_id_auto_generation(client: TestClient) -> None:
     """When no X-Request-ID is supplied, middleware generates one starting with 'req-'."""
     res = client.get("/health")
@@ -107,6 +109,7 @@ def test_request_id_propagation_from_client_header(client: TestClient) -> None:
 # ==============================================================================
 # 3. Liveness vs Readiness Separation Tests
 # ==============================================================================
+
 
 def test_health_liveness_zero_external_dependencies(client: TestClient) -> None:
     """GET /health succeeds as pure liveness probe without touching database or cache."""
@@ -131,7 +134,9 @@ def test_ready_readiness_database_failure_returns_503(client: TestClient) -> Non
 
     async def failing_db():
         session = AsyncMock()
-        session.execute.side_effect = OperationalError("connection refused", {}, Exception("db down"))
+        session.execute.side_effect = OperationalError(
+            "connection refused", {}, Exception("db down")
+        )
         yield session
 
     app.dependency_overrides[get_db] = failing_db
@@ -167,6 +172,7 @@ def test_ready_readiness_redis_failure_returns_503(client: TestClient) -> None:
 # 4. Prometheus Metrics Endpoint (/metrics) Tests
 # ==============================================================================
 
+
 def test_metrics_endpoint_scrapable(client: TestClient) -> None:
     """GET /metrics returns 200 with standard Prometheus text format."""
     res = client.get("/metrics")
@@ -201,7 +207,10 @@ def test_metrics_endpoint_records_traffic_and_triage(client: TestClient) -> None
     body = res.text
 
     # Verify HTTP request count recorded
-    assert 'civicpulse_http_requests_total{endpoint="/health"' in body or 'civicpulse_http_requests_total{' in body
+    assert (
+        'civicpulse_http_requests_total{endpoint="/health"' in body
+        or "civicpulse_http_requests_total{" in body
+    )
     # Verify triage metric recorded
     assert "civicpulse_ai_triage_requests_total" in body
 
@@ -210,13 +219,15 @@ def test_metrics_endpoint_records_traffic_and_triage(client: TestClient) -> None
 # 5. Graceful Lifespan Shutdown Tests
 # ==============================================================================
 
+
 @pytest.mark.asyncio
 async def test_graceful_shutdown_lifespan() -> None:
     """FastAPI lifespan cleanly runs startup and disposes connection pools on shutdown."""
     mock_engine = AsyncMock()
-    with patch("app.db.session.engine", mock_engine), patch(
-        "app.main.close_redis_client", new_callable=AsyncMock
-    ) as mock_redis_close:
+    with (
+        patch("app.db.session.engine", mock_engine),
+        patch("app.main.close_redis_client", new_callable=AsyncMock) as mock_redis_close,
+    ):
         async with lifespan(app):
             # Application is running
             pass
