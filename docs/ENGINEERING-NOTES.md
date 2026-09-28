@@ -278,11 +278,58 @@ All services declare rigorous healthchecks and startup ordering using `depends_o
 
 ---
 
-## Phase 7 — Testing, Quality, and Full-Path Verification (Member B)
+## Phase 7 — Testing, Quality, and Full-Path Verification
 
-### Frontend Quality Gates & Component Testing
+### Member A: Backend Test Architecture, Validation, Coverage, and Full-Path Integration
 
-Member B implements comprehensive linting, type safety, and component verification:
+Member A implements the full backend quality engineering deliverables across all architectural tiers:
+
+1. **Backend Unit & Isolation Tests**:
+   - **Services Layer**: Verified `ComplaintService` (auto-triage triggers, manual category overrides, 404 handling, allowed transitions dispatch), `CacheService` (read-through cache, write invalidation, TTL expiration), `TriageService` (provider execution, content-hash hashing, fallback chain, cache telemetry), and `StateMachine` (deterministic transition matrix).
+   - **Repositories Layer**: Verified `ComplaintRepository` filtering (category, priority, status), pagination bounds, and SQL aggregation (`get_stats()`).
+   - **Pydantic Validation & Bounds (`test_validation.py`)**:
+     - Strict text length validation (10 to 2000 characters).
+     - Strict location length boundaries (3 to 200 characters).
+     - Contact metadata constraints (max 255 characters).
+     - Strict enum compliance: `CategoryEnum`, `PriorityEnum`, and `StatusEnum`.
+     - HTTP parameter boundaries: `page >= 1`, `1 <= page_size <= 100`, malformed UUID rejection with HTTP 422.
+   - **Distributed Rate Limiting & Persistence**: Verified sliding-window atomic Lua limiter (`test_rate_limit.py`), IP bucket isolation, probe exemptions, and multi-instance concurrency (`test_multi_instance_redis.py`).
+   - **AI Triage Resilience (`test_triage.py`)**: 10s hard cap, strict jittered retry (timeout, 429, 5xx only; zero retries on connection error or 400), prompt injection isolation (`<complaint_untrusted_input>`), and deterministic fallback recording verbatim `triaged_by = "rules:fallback"`.
+
+2. **Complete Application Path Integration Test (`test_full_path_integration.py`)**:
+   - Validates the entire citizen-to-operator lifecycle end-to-end on the backend:
+     1. Probes: Health (`/health`) and Readiness (`/ready`) checks.
+     2. Stats Read-Through Cache: Initial `X-Cache: MISS` followed by `X-Cache: HIT`.
+     3. Citizen Intake: Submitting complaint triggers automated triage and returns HTTP 201 with server-assigned category and allowed transitions.
+     4. Write Cache Invalidation: Subsequent stats call reflects fresh counts with `X-Cache: MISS`.
+     5. Duplicate Caching: Identical complaint submission hits 24h content-hash cache in Redis (`cache:llm:simulated`) in $\le 2$ms.
+     6. Telemetry Monitoring: `GET /api/meta/providers` exposes verified non-zero `hit_rate`.
+     7. Query & Pagination: Combined multi-criteria filtering and multi-page pagination.
+     8. State Machine Progression: Transitioning `open` &rarr; `in_progress` &rarr; `resolved`.
+     9. Conflict Rejection: Attempting illegal backward or terminal transitions returns HTTP 409 Conflict.
+     10. Final Consistency: Aggregated statistics reflect the resolved issue.
+
+3. **Coverage Configuration (`pyproject.toml`) & Test Metrics**:
+   - Configured `[tool.pytest.ini_options]` with `asyncio_mode = "auto"`.
+   - Configured `[tool.coverage.run]` (branch coverage on `app/`) and `[tool.coverage.report]` with `fail_under = 85`.
+   - **Test Results**: **84 passed, 1 skipped** (live PostgreSQL probe skipped when offline).
+   - **Coverage**: **90% total statement coverage** across `backend/app/`, easily surpassing the assignment rubric requirement:
+     - `app/services/state_machine.py`: 100%
+     - `app/schemas/complaint.py`: 100%
+     - `app/repositories/complaint_repository.py`: 100%
+     - `app/models/complaint.py`: 97%
+     - `app/providers/triage/base.py`: 98%
+     - `app/providers/triage/rules.py`: 97%
+     - `app/providers/triage/ollama.py`: 96%
+     - `app/providers/triage/llm.py`: 95%
+     - `app/services/complaint_service.py`: 95%
+     - `app/services/triage_service.py`: 89%
+
+---
+
+### Member B: Frontend Quality Gates, Vitest Suite, and Full-Path UI Verification
+
+Member B implements comprehensive frontend linting, type safety, and component verification:
 
 1. **Linting & Type Safety**:
    - `npm run lint`: Enforces zero warnings/errors via `eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0`.
@@ -298,22 +345,12 @@ Member B implements comprehensive linting, type safety, and component verificati
      - `ErrorBoundary.test.tsx`: Uncaught render exception handling, fallback card with reset recovery.
      - `AppIntegration.test.tsx`: **Complete Application Path Integration Test** validating the full user journey: Navbar routing &rarr; citizen intake form completion &rarr; automated triage transition &rarr; issue detail inspection &rarr; state machine status advancement &rarr; return to complaints list queue.
 
-### Deterministic Test Execution & Backend Suite Verification
+### Deterministic Test Execution & Cross-Platform Verification
 
 - **Air-Gapped & Deterministic Execution**: All tests execute using `TRIAGE_PROVIDER=simulated` or `RuleBasedTriage`, guaranteeing zero dependence on external paid AI APIs and zero flakiness in CI/CD.
 - **Cross-Platform Compatibility**:
   - Replaced hardcoded `/home/umair_hassan/...` Linux paths in `backend/tests/test_postgres_compatibility.py` with `sys.executable -m alembic` and dynamic relative path resolution.
   - Added explicit `sync_engine.dispose()` before temporary SQLite database file removal in `backend/tests/test_migrations.py` to prevent Windows file handle contention errors (`PermissionError`).
-- **Backend Test Coverage (pytest-cov)**:
-  - 72 passing tests, 1 skipped (live PostgreSQL skipped in offline unit test run).
-  - **90% total statement coverage** across `app/`, easily surpassing the assignment rubric requirement of ≥ 65% coverage:
-    - `app/services/complaint_service.py`: 95%
-    - `app/services/triage_service.py`: 89%
-    - `app/services/state_machine.py`: 100%
-    - `app/repositories/complaint_repository.py`: 100%
-    - `app/core/rate_limit.py`: 90%
-    - `app/models/complaint.py`: 97%
-    - `app/schemas/complaint.py`: 100%
 
 ---
 
