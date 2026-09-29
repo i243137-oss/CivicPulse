@@ -12,20 +12,24 @@ This document provides auditable verification for **Rubric Section A · Collabor
 
 ### Protection Configuration State
 
-The `main` branch is protected using GitHub Branch Protection rules configured via the GitHub REST API:
+The `main` branch is protected using both Classic Branch Protection rules and GitHub Repository Rulesets configured via the GitHub REST API:
 
 ```json
 {
   "name": "main",
   "protected": true,
-  "required_pull_request_reviews": {
-    "dismiss_stale_reviews": false,
-    "require_code_owner_reviews": false,
-    "require_last_push_approval": false,
-    "required_approving_review_count": 0
+  "required_status_checks": {
+    "strict": true,
+    "contexts": [
+      "Lint & Static Type Checking",
+      "Backend Test Suite & Coverage",
+      "Frontend Component Tests"
+    ]
   },
-  "enforce_admins": {
-    "enabled": false
+  "required_pull_request_reviews": {
+    "dismiss_stale_reviews": true,
+    "require_code_owner_reviews": false,
+    "required_approving_review_count": 1
   },
   "allow_force_pushes": {
     "enabled": false
@@ -39,10 +43,21 @@ The `main` branch is protected using GitHub Branch Protection rules configured v
 ### Verification Command & Output
 
 ```bash
-$ gh api repos/i243137-oss/CivicPulse/branches/main --jq "{name: .name, protected: .protected}"
+$ gh api repos/i243137-oss/CivicPulse/branches/main/protection --jq "{approvals: .required_pull_request_reviews.required_approving_review_count, checks: .required_status_checks.contexts}"
 {
-  "name": "main",
-  "protected": true
+  "approvals": 1,
+  "checks": [
+    "Lint & Static Type Checking",
+    "Backend Test Suite & Coverage",
+    "Frontend Component Tests"
+  ]
+}
+
+$ gh api repos/i243137-oss/CivicPulse/rulesets --jq ".[0] | {name: .name, enforcement: .enforcement, id: .id}"
+{
+  "name": "Main Protection Ruleset",
+  "enforcement": "active",
+  "id": 24187227
 }
 ```
 
