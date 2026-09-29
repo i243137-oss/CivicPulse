@@ -73,6 +73,5 @@ docs/DEMO-SCRIPT.md
 
 FINAL_SUBMISSION.md
 docs/FINAL_SUBMISSION.md
-docs/evidence/hpa-replicas-vs-load.png
 hpa_replicas_vs_load.png
 scripts/generate_hpa_chart.py
