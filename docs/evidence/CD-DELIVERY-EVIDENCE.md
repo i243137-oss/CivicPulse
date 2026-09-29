@@ -145,6 +145,7 @@ The assignment requires understanding and demonstrating two rollback strategies:
 | :--- | :--- | :---: |
 | **Workflow File** | `.github/workflows/cd.yml` | Verified |
 | **Release Workflow** | `.github/workflows/release.yml` | Verified |
+| **Passing CD Run** | [Run #36445744373](https://github.com/i243137-oss/CivicPulse/actions/runs/36445744373) | Verified (100% Green) |
 | **Gated by Needs** | `build-push` needs `test`; `deploy-k8s` needs `build-push` | Verified |
 | **Immutable Tagging** | Tagged with `${{ github.sha }}`; :latest never deployed | Verified |
 | **Registry Publishing** | Pushed to GHCR using scoped `GITHUB_TOKEN` | Verified |
