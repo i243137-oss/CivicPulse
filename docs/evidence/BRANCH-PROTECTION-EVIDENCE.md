@@ -207,3 +207,23 @@ async def logging_middleware(request: Request, call_next):
 ### Resolution & Rationale (Why That Version Won)
 
 > **Resolution Rationale**: Rather than selecting one version at the expense of the other, the resolved implementation integrated both changes in the correct execution order. The request-ID logging middleware was positioned outermost so every incoming HTTP request generates or propagates the `X-Request-ID` before passing down to the CORS middleware, while preserving the strict settings-driven CORS origin allowlist. This combined approach satisfied both the observability contract (Phase 8) and frontend reverse-proxy integration (Phase 5).
+
+---
+
+### 5.2 Web UI Pull Request Merge Conflict Demonstration (PR #49)
+
+- **Conflicted File**: `backend/app/main.py` (FastAPI application description metadata)
+- **Branches Involved**: `demo/conflict-branch-a` (Release candidate description: `v1.0.0-rc1`) vs `demo/conflict-branch-b` (Microservice architecture description).
+- **Pull Request Evidence**: [Pull Request #49: deliberate merge conflict on application description](https://github.com/i243137-oss/CivicPulse/pull/49) (Captured and verified).
+
+#### Conflict Markers Detected in PR #49:
+```python
+<<<<<<< HEAD (demo/conflict-branch-b)
+    description="CivicPulse - Automated civic complaints triage and resolution microservice.",
+=======
+    description="Municipal complaint intake and AI triage operations platform (v1.0.0-rc1).",
+>>>>>>> demo/conflict-branch-a
+```
+
+#### Why That Version Won:
+> **Resolution Rationale**: During the integration of Branch A (release candidate metadata) and Branch B (microservice architecture specification), a content conflict occurred on the FastAPI application description in `backend/app/main.py`. The conflict was resolved by harmonizing both changes into: `"CivicPulse: Municipal complaint intake, AI triage and resolution operations platform"`. This won because it preserves both the broader municipal domain scope from Branch A while maintaining the specific AI triage and resolution identity emphasized in Branch B.
