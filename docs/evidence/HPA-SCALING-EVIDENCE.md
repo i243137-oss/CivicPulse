@@ -288,6 +288,10 @@ Events:
   Normal  SuccessfulRescale  1m45s  horizontal-pod-autoscaler  New size: 6; reason: cpu resource utilisation (percentage of request) above target
 ```
 
+### 5.3 Replicas vs. Load Scaling Chart
+
+![CivicPulse HPA v2 Replicas vs Load Performance](hpa-replicas-vs-load.png)
+
 ---
 
 ## 6. Rollout Safety & Zero-Downtime Analysis (Finding 4)
